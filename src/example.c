@@ -104,12 +104,18 @@ end:
 int main (int argc, char * const argv[]) {
 	int32_t l, m, k, match = 2, mismatch = 2, gap_open = 3, gap_extension = 1;	// default parameters for genome sequence alignment
 	// reference sequence
+    /*
 	char ref_seq[40] = {'C', 'A', 'G', 'C', 'C', 'T', 'T', 'T', 'C', 'T', 'G', 'A', 'C', 'C', 'C', 'G', 'G', 'A', 'A', 'A', 'T', 
 						'C', 'A', 'A', 'A', 'A', 'T', 'A', 'G', 'G', 'C', 'A', 'C', 'A', 'A', 'C', 'A', 'A', 'A', '\0'};	
 	char read_seq[16] = {'C', 'T', 'G', 'A', 'G', 'C', 'C', 'G', 'G', 'T', 'A', 'A', 'A', 'T', 'C', '\0'};	// read sequence
+    */
+
+    char *ref_seq = argv[1];
+    char *read_seq = argv[2];
+
 	s_profile* profile;
-	int8_t* num = (int8_t*)malloc(16);	// the read sequence represented in numbers
-	int8_t* ref_num = (int8_t*)malloc(64);	// the read sequence represented in numbers
+	int8_t* num = (int8_t*)malloc(strlen(read_seq));	// the read sequence represented in numbers
+	int8_t* ref_num = (int8_t*)malloc(strlen(ref_seq));	// the read sequence represented in numbers
 	s_align* result;
 
 	/* This table is used to transform nucleotide letters into numbers. */
@@ -138,12 +144,12 @@ int main (int argc, char * const argv[]) {
 	}
 	for (m = 0; m < 5; ++m) mat[k++] = 0;
 
-	for (m = 0; m < 15; ++m) num[m] = nt_table[(int)read_seq[m]];
-	profile = ssw_init(num, 15, mat, 5, 2);
-	for (m = 0; m < 39; ++m) ref_num[m] = nt_table[(int)ref_seq[m]];
+	for (m = 0; m < strlen(read_seq); ++m) num[m] = nt_table[(int)read_seq[m]];
+	profile = ssw_init(num, strlen(read_seq), mat, 5, 2);
+	for (m = 0; m < strlen(ref_seq); ++m) ref_num[m] = nt_table[(int)ref_seq[m]];
 
 	// Only the 8 bit of the flag is setted. ssw_align will always return the best alignment beginning position and cigar.
-	result = ssw_align (profile, ref_num, 39, gap_open, gap_extension, 1, 0, 0, 15);	
+	result = ssw_align (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15);	
 	ssw_write(result, ref_seq, read_seq, nt_table);
 
 	free(mat);

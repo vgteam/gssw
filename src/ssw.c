@@ -41,6 +41,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <inttypes.h>
 #include "ssw.h"
 
 #ifdef __GNUC__
@@ -158,6 +159,7 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 	__m128i* pvHLoad = (__m128i*) calloc(segLen, sizeof(__m128i));
 	__m128i* pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
 	__m128i* pvHmax = (__m128i*) calloc(segLen, sizeof(__m128i));
+    uint8_t* mH = (uint8_t*) calloc(segLen * 16 *refLen, sizeof(uint8_t));
 
 	int32_t i, j;
 	/* 16 byte insertion begin vector */
@@ -188,8 +190,8 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 		__m128i e = vZero, vF = vZero, vMaxColumn = vZero; /* Initialize F value to 0. 
 							   Any errors to vH values will be corrected in the Lazy_F loop. 
 							 */
-//		max16(maxColumn[i], vMaxColumn);
-//		fprintf(stderr, "middle[%d]: %d\n", i, maxColumn[i]);
+		//max16(maxColumn[i], vMaxColumn);
+		//fprintf(stderr, "middle[%d]: %d\n", i, maxColumn[i]);
 
 		__m128i vH = pvHStore[segLen - 1];
 		vH = _mm_slli_si128 (vH, 1); /* Shift the 128-bit value in vH left by 1 byte. */
@@ -206,19 +208,25 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 			vH = _mm_subs_epu8(vH, vBias); /* vH will be always > 0 */
 	//	max16(maxColumn[i], vH);
 	//	fprintf(stderr, "H[%d]: %d\n", i, maxColumn[i]);
-//	int8_t* t;
-//	int32_t ti;
-//for (t = (int8_t*)&vH, ti = 0; ti < 16; ++ti) fprintf(stderr, "%d\t", *t++);
+            /*
+            int8_t* t;
+            int32_t ti;
+            fprintf(stdout, "%d\n", i);
+            for (t = (int8_t*)&vH, ti = 0; ti < 16; ++ti) fprintf(stdout, "%d\t", *t++);
+            fprintf(stdout, "\n");
+            */
 
 			/* Get max from vH, vE and vF. */
 			e = _mm_load_si128(pvE + j);
 			vH = _mm_max_epu8(vH, e);
 			vH = _mm_max_epu8(vH, vF);
 			vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
-			
-	//	max16(maxColumn[i], vMaxColumn);
-	//	fprintf(stderr, "middle[%d]: %d\n", i, maxColumn[i]);
-//	for (t = (int8_t*)&vMaxColumn, ti = 0; ti < 16; ++ti) fprintf(stderr, "%d\t", *t++);
+
+            // max16(maxColumn[i], vMaxColumn);
+            //fprintf(stdout, "middle[%d]: %d\n", i, maxColumn[i]);
+            //fprintf(stdout, "i=%d, j=%d\t", i, j);
+            //for (t = (int8_t*)&vMaxColumn, ti = 0; ti < 16; ++ti) fprintf(stdout, "%d\t", *t++);
+            //fprintf(stdout, "\n");
 
 			/* Save vH values. */
 			_mm_store_si128(pvHStore + j, vH);
@@ -251,7 +259,7 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 		vTemp = _mm_cmpeq_epi8 (vTemp, vZero);
 		cmp  = _mm_movemask_epi8 (vTemp);
 
-        while (cmp != 0xffff) 
+        while (cmp != 0xffff)
         {
             vH = _mm_max_epu8 (vH, vF);
 			vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
@@ -287,14 +295,43 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 			
 				/* Store the column with the highest alignment score in order to trace the alignment ending position on read. */
 				for (j = 0; LIKELY(j < segLen); ++j) pvHmax[j] = pvHStore[j];
+
 			}
 		}
 
+        // save the current column
+        // 
+        for (j = 0; LIKELY(j < segLen); ++j) {
+            int8_t* t;
+            int32_t ti;
+            vH = pvHStore[j];
+            for (t = (int8_t*)&vH, ti = 0; ti < 16; ++ti) {
+                //fprintf(stdout, "%d\t", *t++);
+                mH[i*readLen + ti*segLen + j] = *t++;
+            }
+            //fprintf(stdout, "\n");
+        }
+
 		/* Record the max score of current column. */	
 		max16(maxColumn[i], vMaxColumn);
-//		fprintf(stderr, "maxColumn[%d]: %d\n", i, maxColumn[i]);
+		//fprintf(stderr, "maxColumn[%d]: %d\n", i, maxColumn[i]);
 		if (maxColumn[i] == terminate) break;
+
 	}
+
+    /* print out mH */
+    /*
+    if (ref_dir == 0) {
+        for (j = 0; LIKELY(j < readLen); ++j) {
+            for (i = 0; LIKELY(i < refLen); ++i) {
+                //printf("(%u, %u) %u\n", i, j, mH[i*readLen + j]);
+                fprintf(stdout, "(%u, %u) %u\t", i, j, mH[i*readLen + j]);
+            }
+            fprintf(stdout, "\n");
+        }
+        fprintf(stdout, "\n");
+    }
+    */
 	
 	/* Trace the alignment ending position on read. */
 	uint8_t *t = (uint8_t*)pvHmax;
@@ -415,6 +452,8 @@ alignment_end* sw_sse2_word (const int8_t* ref,
 	__m128i vTemp;
 	int32_t edge, begin = 0, end = refLen, step = 1;
 
+    uint16_t* mH = (uint16_t*) calloc(segLen * 8 *refLen, sizeof(uint16_t));
+
 	/* outer loop to process the reference sequence */
 	if (ref_dir == 1) {
 		begin = refLen - 1;
@@ -494,11 +533,38 @@ end:
 				for (j = 0; LIKELY(j < segLen); ++j) pvHmax[j] = pvHStore[j];
 			}
 		}
+
+        /* save current column */
+        for (j = 0; LIKELY(j < segLen); ++j) {
+            uint16_t* t;
+            int32_t ti;
+            vH = pvHStore[j];
+            for (t = (uint16_t*)&vH, ti = 0; ti < 8; ++ti) {
+                //fprintf(stdout, "%d\t", *t++);
+                mH[i*readLen + ti*segLen + j] = *t++;
+            }
+            //fprintf(stdout, "\n");
+        }
 		
 		/* Record the max score of current column. */	
 		max8(maxColumn[i], vMaxColumn);
 		if (maxColumn[i] == terminate) break;
+
 	} 	
+
+    /* print out mH */
+    /*
+    if (ref_dir == 0) {
+        for (j = 0; LIKELY(j < readLen); ++j) {
+            for (i = 0; LIKELY(i < refLen); ++i) {
+                //printf("(%u, %u) %u\n", i, j, mH[i*readLen + j]);
+                fprintf(stdout, "(%u, %u) %u\t", i, j, mH[i*readLen + j]);
+            }
+            fprintf(stdout, "\n");
+        }
+        fprintf(stdout, "\n");
+    }
+    */
 
 	/* Trace the alignment ending position on read. */
 	uint16_t *t = (uint16_t*)pvHmax;
