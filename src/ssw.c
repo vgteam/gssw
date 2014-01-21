@@ -835,7 +835,7 @@ void init_destroy (s_profile* p) {
 }
 
 s_align* ssw_align (const s_profile* prof, 
-					const int8_t* ref, 
+					const int8_t* ref,
 				  	int32_t refLen, 
 				  	const uint8_t weight_gapO, 
 				  	const uint8_t weight_gapE, 
