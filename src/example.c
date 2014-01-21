@@ -152,6 +152,14 @@ int main (int argc, char * const argv[]) {
 	result = ssw_align (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15);	
 	ssw_write(result, ref_seq, read_seq, nt_table);
 
+	result = ssw_fill (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15);
+    print_score_matrix_word(strlen(ref_seq), strlen(read_seq), result->mH);
+
+    int16_t* t;
+    int32_t ti;
+    for (t = (int16_t*)&result->pvE, ti = 0; ti < 8; ++ti) fprintf(stdout, "%d\t", *t++);
+    fprintf(stdout, "\n");
+
 	free(mat);
 	free(ref_num);
 	free(num);
