@@ -14,7 +14,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Author: Mengyao Zhao, Wan-Ping Lee, Erik Garrison
+
 Contact: Mengyao Zhao <zhangmp@bc.edu>
+
 Last revision: 20/01/2014
 
 ## Overview
@@ -33,6 +35,7 @@ which allows access to the alignment score matrix and E vector.  This allows for
 The API files include ssw.h and ssw.c, which can be directly used by any C or C++ program. For the C++ users who are more comfortable to use a C++ style interface, an additional C++ wrapper is provided with the file ssw\_cpp.cpp and ssw\_cpp.h. 
 
 To use the C style API, please: 
+
 1. Download ssw.h and ssw.c, and put them in the same folder of your own program files.
 2. Write #include "ssw.h" into your file that will call the API functions.
 3. The API files are ready to be compiled together with your own C/C++ files.
@@ -40,6 +43,7 @@ To use the C style API, please:
 The API function descriptions are in the file ssw.h. One simple example of the API usage is example.c. The Smith-Waterman penalties need to be integers. Small penalty numbers such as: match: 2, mismatch: -1, gap open: -3, gap extension: -1 are recommended, which will lead to shorter running time.  
 
 To use the C++ style API, please: 
+
 1. Download ssw.h, ssw.c, ssw\_cpp.cpp and ssw\_cpp.h and put them in the same folder of your own program files.
 2. Write #include "ssw\_cpp.h" into your file that will call the API functions.
 3. The API files are ready to be compiled together with your own C/C++ files.
