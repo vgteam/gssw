@@ -47,7 +47,7 @@ typedef struct {
 	int32_t cigarLen;
     void* mH;
     __m128i* pvE;
-    __m128i vH;
+    __m128i* pvHStore;
 } s_align;
 
 #ifdef __cplusplus
@@ -78,6 +78,8 @@ s_profile* ssw_init (const int8_t* read, const int32_t readLen, const int8_t* ma
 	@param	p	pointer to the query profile structure	
 */
 void init_destroy (s_profile* p);
+
+void align_init (s_align* a);
 
 void s_align_destroy (s_align* a);
 
@@ -165,7 +167,9 @@ s_align* ssw_fill (const s_profile* prof,
                    const uint8_t flag,
                    const uint16_t filters,
                    const int32_t filterd,
-                   const int32_t maskLen);
+                   const int32_t maskLen,
+                   const uint8_t use_seed,
+                   const s_align* seed);
 
 
 /*!	@function	Release the memory allocated by function ssw_align.
@@ -191,6 +195,13 @@ void print_score_matrix_byte (int32_t refLen, int32_t readLen, uint8_t* mH);
     @param mH       Score matrix.
 */
 void print_score_matrix_word (int32_t refLen, int32_t readLen, uint16_t* mH);
+
+/*! @function       Print score matrix, determines stride from result score
+    @param refLen   Reference length.
+    @param readLen  Read length.
+    @param result   Alignment result.
+*/
+void print_score_matrix (int32_t refLen, int32_t readLen, s_align* result);
 
 #ifdef __cplusplus
 }

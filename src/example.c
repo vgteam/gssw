@@ -149,16 +149,20 @@ int main (int argc, char * const argv[]) {
 	for (m = 0; m < strlen(ref_seq); ++m) ref_num[m] = nt_table[(int)ref_seq[m]];
 
 	// Only the 8 bit of the flag is setted. ssw_align will always return the best alignment beginning position and cigar.
-	result = ssw_align (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15);	
-	ssw_write(result, ref_seq, read_seq, nt_table);
+	//result = ssw_align (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15);	
+	//ssw_write(result, ref_seq, read_seq, nt_table);
 
-	result = ssw_fill (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15);
-    print_score_matrix_word(strlen(ref_seq), strlen(read_seq), result->mH);
+	result = ssw_fill (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15, 0, NULL);
+    print_score_matrix(strlen(ref_seq), strlen(read_seq), result);
+	result = ssw_fill (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15, 1, result);
+    print_score_matrix(strlen(ref_seq), strlen(read_seq), result);
 
+    /*
     int16_t* t;
     int32_t ti;
     for (t = (int16_t*)&result->pvE, ti = 0; ti < 8; ++ti) fprintf(stdout, "%d\t", *t++);
     fprintf(stdout, "\n");
+    */
 
 	free(mat);
 	free(ref_num);
