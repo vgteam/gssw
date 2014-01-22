@@ -135,6 +135,7 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 	 						 uint8_t bias,  /* Shift 0 point to a positive value. */
 							 int32_t maskLen,
                              uint8_t** score_matrix,
+                             __m128i* last_vH,
                              __m128i** last_pvE) { 
 
 // TODO inject last pvE, vH from parents
@@ -167,7 +168,8 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
         pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
         *last_pvE = pvE;
     } else {
-        pvE = *last_pvE;
+        pvE = *last_pvE; // set pvE
+        pvHStore[segLen - 1] = *last_vH; // and carry over vH
     }
 
     *last_pvE = pvE;
@@ -333,6 +335,9 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 
 	}
 
+    // save the last vH
+    *last_vH = pvHStore[segLen - 1];
+
     /* print out mH */
     /*
     if (ref_dir == 0) {
@@ -430,6 +435,7 @@ alignment_end* sw_sse2_word (const int8_t* ref,
 							 uint16_t terminate, 
 							 int32_t maskLen,
                              uint16_t** score_matrix,
+                             __m128i* last_vH,
                              __m128i** last_pvE) {
 
 #define max8(m, vm) (vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 8)); \
@@ -462,7 +468,8 @@ alignment_end* sw_sse2_word (const int8_t* ref,
         pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
         *last_pvE = pvE;
     } else {
-        pvE = *last_pvE;
+        pvE = *last_pvE; // seed vE
+        pvHStore[segLen - 1] = *last_vH; // and carry over vH
     }
 
 	__m128i* pvHmax = (__m128i*) calloc(segLen, sizeof(__m128i));
@@ -580,6 +587,9 @@ end:
 		if (maxColumn[i] == terminate) break;
 
 	} 	
+
+    // save the last vH
+    *last_vH = pvHStore[segLen - 1];
 
     /* print out mH */
     /*
@@ -887,20 +897,20 @@ s_align* ssw_fill (const s_profile* prof,
 	// Find the alignment scores and ending positions
 	if (prof->profile_byte) {
 		bests = sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen,
-                             (uint8_t**)&r->mH, (__m128i**)&r->pvE);
+                             (uint8_t**)&r->mH, &r->vH, (__m128i**)&r->pvE);
         //print_score_matrix_byte(refLen, readLen, (uint8_t*)r->mH);
 		if (prof->profile_word && bests[0].score == 255) {
 			free(bests);
             align_clear_matrix_and_pvE(r);
 			bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
-                                 (uint16_t**)&r->mH, (__m128i**)&r->pvE);
+                                 (uint16_t**)&r->mH, &r->vH, (__m128i**)&r->pvE);
         } else if (bests[0].score == 255) {
 			fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
 			return 0;
 		}
 	} else if (prof->profile_word) {
 		bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen, 
-                             (uint16_t**)&r->mH, (__m128i**)&r->pvE);
+                             (uint16_t**)&r->mH, &r->vH, (__m128i**)&r->pvE);
     } else {
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
 		return 0;
@@ -948,22 +958,25 @@ s_align* ssw_align (const s_profile* prof,
 
 	// Find the alignment scores and ending positions
 	if (prof->profile_byte) {
-		bests = sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen,
-                             (uint8_t**)&r->mH, (__m128i**)&r->pvE);
+		bests = sw_sse2_byte(ref, 0, refLen, readLen,
+                             weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen,
+                             (uint8_t**)&r->mH, &r->vH, (__m128i**)&r->pvE);
         //print_score_matrix_byte(refLen, readLen, (uint8_t*)r->mH);
 		if (prof->profile_word && bests[0].score == 255) {
 			free(bests);
             align_clear_matrix_and_pvE(r);
-			bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
-                                 (uint16_t**)&r->mH, (__m128i**)&r->pvE);
+			bests = sw_sse2_word(ref, 0, refLen, readLen,
+                                 weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
+                                 (uint16_t**)&r->mH, &r->vH, (__m128i**)&r->pvE);
 			word = 1;
 		} else if (bests[0].score == 255) {
 			fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
 			return 0;
 		}
 	} else if (prof->profile_word) {
-		bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
-                             (uint16_t**)&r->mH, (__m128i**)&r->pvE);
+		bests = sw_sse2_word(ref, 0, refLen, readLen,
+                             weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
+                             (uint16_t**)&r->mH, &r->vH, (__m128i**)&r->pvE);
 		word = 1;
 	} else {
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
@@ -986,12 +999,14 @@ s_align* ssw_align (const s_profile* prof,
 	read_reverse = seq_reverse(prof->read, r->read_end1);
 	if (word == 0) {
 		vP = qP_byte(read_reverse, prof->mat, r->read_end1 + 1, prof->n, prof->bias);
-		bests_reverse = sw_sse2_byte(ref, 1, r->ref_end1 + 1, r->read_end1 + 1, weight_gapO, weight_gapE, vP, r->score1, prof->bias, maskLen,
-                                     (uint8_t**)&r->mH, (__m128i**)&r->pvE);
+		bests_reverse = sw_sse2_byte(ref, 1, r->ref_end1 + 1, r->read_end1 + 1,
+                                     weight_gapO, weight_gapE, vP, r->score1, prof->bias, maskLen,
+                                     (uint8_t**)&r->mH, &r->vH, (__m128i**)&r->pvE);
 	} else {
 		vP = qP_word(read_reverse, prof->mat, r->read_end1 + 1, prof->n);
-		bests_reverse = sw_sse2_word(ref, 1, r->ref_end1 + 1, r->read_end1 + 1, weight_gapO, weight_gapE, vP, r->score1, maskLen,
-                                     (uint16_t**)&r->mH, (__m128i**)&r->pvE);
+		bests_reverse = sw_sse2_word(ref, 1, r->ref_end1 + 1, r->read_end1 + 1,
+                                     weight_gapO, weight_gapE, vP, r->score1, maskLen,
+                                     (uint16_t**)&r->mH, &r->vH, (__m128i**)&r->pvE);
 	}
 	free(vP);
 	free(read_reverse);
@@ -1025,6 +1040,8 @@ void align_destroy (s_align* a) {
 void align_clear_matrix_and_pvE (s_align* a) {
     free(a->mH);
     free(a->pvE);
+    a->mH = NULL;
+    a->pvE = NULL;
 }
 
 void print_score_matrix_byte (int32_t refLen, int32_t readLen, uint8_t* mH) {

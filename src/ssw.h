@@ -47,6 +47,7 @@ typedef struct {
 	int32_t cigarLen;
     void* mH;
     __m128i* pvE;
+    __m128i vH;
 } s_align;
 
 #ifdef __cplusplus
