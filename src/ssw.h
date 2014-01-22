@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 #include <emmintrin.h>
 
 /*!	@typedef	structure of the query profile	*/
@@ -50,7 +51,7 @@ typedef struct {
 
 #ifdef __cplusplus
 extern "C" {
-#endif	// __cplusplus
+#endif // __cplusplus
 
 /*!	@function	Create the query profile using the query sequence.
 	@param	read	pointer to the query sequence; the query sequence needs to be numbers
@@ -164,6 +165,7 @@ s_align* ssw_fill (const s_profile* prof,
                    const uint16_t filters,
                    const int32_t filterd,
                    const int32_t maskLen);
+
 
 /*!	@function	Release the memory allocated by function ssw_align.
 	@param	a	pointer to the alignment result structure

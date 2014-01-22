@@ -161,7 +161,15 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 
 	__m128i* pvHStore = (__m128i*) calloc(segLen, sizeof(__m128i));
 	__m128i* pvHLoad = (__m128i*) calloc(segLen, sizeof(__m128i));
-	__m128i* pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
+    // initialize pvE, optionally cannibalizing last buffer
+    __m128i* pvE;
+    if (*last_pvE == NULL) {
+        pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
+        *last_pvE = pvE;
+    } else {
+        pvE = *last_pvE;
+    }
+
     *last_pvE = pvE;
 	__m128i* pvHmax = (__m128i*) calloc(segLen, sizeof(__m128i));
     uint8_t* mH = (uint8_t*) calloc(segLen * 16 *refLen, sizeof(uint8_t));
@@ -422,7 +430,7 @@ alignment_end* sw_sse2_word (const int8_t* ref,
 							 uint16_t terminate, 
 							 int32_t maskLen,
                              uint16_t** score_matrix,
-                             __m128i** last_pvE) { 
+                             __m128i** last_pvE) {
 
 #define max8(m, vm) (vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 8)); \
 					(vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 4)); \
@@ -445,8 +453,18 @@ alignment_end* sw_sse2_word (const int8_t* ref,
 
 	__m128i* pvHStore = (__m128i*) calloc(segLen, sizeof(__m128i));
 	__m128i* pvHLoad = (__m128i*) calloc(segLen, sizeof(__m128i));
-    __m128i* pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
-    *last_pvE = pvE;
+    // this should check some condition
+    // to determine if we are aligning 
+    
+    // initialize pvE, optionally cannibalizing last buffer
+    __m128i* pvE;
+    if (*last_pvE == NULL) {
+        pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
+        *last_pvE = pvE;
+    } else {
+        pvE = *last_pvE;
+    }
+
 	__m128i* pvHmax = (__m128i*) calloc(segLen, sizeof(__m128i));
 
 	int32_t i, j, k;
@@ -923,6 +941,7 @@ s_align* ssw_align (const s_profile* prof,
 	r->read_begin1 = -1;
 	r->cigar = 0;
 	r->cigarLen = 0;
+    r->pvE = NULL;
 	if (maskLen < 15) {
 		fprintf(stderr, "When maskLen < 15, the function ssw_align doesn't return 2nd best alignment information.\n");
 	}
@@ -1012,8 +1031,6 @@ void print_score_matrix_byte (int32_t refLen, int32_t readLen, uint8_t* mH) {
     int32_t i,j;
     for (j = 0; LIKELY(j < readLen); ++j) {
         for (i = 0; LIKELY(i < refLen); ++i) {
-            //printf("(%u, %u) %u\n", i, j, mH[i*readLen + j]);
-            //fprintf(stdout, "(%u, %u)\t", i, j);
             fprintf(stdout, "(%u, %u) %u\t", i, j, mH[i*readLen + j]);
         }
         fprintf(stdout, "\n");
@@ -1025,7 +1042,6 @@ void print_score_matrix_word (int32_t refLen, int32_t readLen, uint16_t* mH) {
     int32_t i,j;
     for (j = 0; LIKELY(j < readLen); ++j) {
         for (i = 0; LIKELY(i < refLen); ++i) {
-            //printf("(%u, %u) %u\n", i, j, mH[i*readLen + j]);
             fprintf(stdout, "(%u, %u) %u\t", i, j, mH[i*readLen + j]);
         }
         fprintf(stdout, "\n");
