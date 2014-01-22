@@ -110,12 +110,14 @@ int main (int argc, char * const argv[]) {
 	char read_seq[16] = {'C', 'T', 'G', 'A', 'G', 'C', 'C', 'G', 'G', 'T', 'A', 'A', 'A', 'T', 'C', '\0'};	// read sequence
     */
 
-    char *ref_seq = argv[1];
-    char *read_seq = argv[2];
+    char *ref_seq_1 = argv[1];
+    char *ref_seq_2 = argv[2];
+    char *read_seq = argv[3];
 
 	s_profile* profile;
 	int8_t* num = (int8_t*)malloc(strlen(read_seq));	// the read sequence represented in numbers
-	int8_t* ref_num = (int8_t*)malloc(strlen(ref_seq));	// the read sequence represented in numbers
+	int8_t* ref_num_1 = (int8_t*)malloc(strlen(ref_seq_1));	// the read sequence represented in numbers
+	int8_t* ref_num_2 = (int8_t*)malloc(strlen(ref_seq_2));	// the read sequence represented in numbers
 	s_align* result;
 
 	/* This table is used to transform nucleotide letters into numbers. */
@@ -146,16 +148,17 @@ int main (int argc, char * const argv[]) {
 
 	for (m = 0; m < strlen(read_seq); ++m) num[m] = nt_table[(int)read_seq[m]];
 	profile = ssw_init(num, strlen(read_seq), mat, 5, 2);
-	for (m = 0; m < strlen(ref_seq); ++m) ref_num[m] = nt_table[(int)ref_seq[m]];
+	for (m = 0; m < strlen(ref_seq_1); ++m) ref_num_1[m] = nt_table[(int)ref_seq_1[m]];
+	for (m = 0; m < strlen(ref_seq_2); ++m) ref_num_2[m] = nt_table[(int)ref_seq_2[m]];
 
 	// Only the 8 bit of the flag is setted. ssw_align will always return the best alignment beginning position and cigar.
 	//result = ssw_align (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15);	
 	//ssw_write(result, ref_seq, read_seq, nt_table);
 
-	result = ssw_fill (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15, 0, NULL);
-    print_score_matrix(strlen(ref_seq), strlen(read_seq), result);
-	result = ssw_fill (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15, 1, result);
-    print_score_matrix(strlen(ref_seq), strlen(read_seq), result);
+	result = ssw_fill (profile, ref_num_1, strlen(ref_seq_1), gap_open, gap_extension, 1, 0, 0, 15, 0, NULL);
+    print_score_matrix(strlen(ref_seq_1), strlen(read_seq), result);
+	result = ssw_fill (profile, ref_num_2, strlen(ref_seq_2), gap_open, gap_extension, 1, 0, 0, 15, 1, result);
+    print_score_matrix(strlen(ref_seq_2), strlen(read_seq), result);
 
     /*
     int16_t* t;
@@ -165,7 +168,8 @@ int main (int argc, char * const argv[]) {
     */
 
 	free(mat);
-	free(ref_num);
+	free(ref_num_1);
+	free(ref_num_2);
 	free(num);
 	return(0);
 }
