@@ -102,7 +102,12 @@ end:
 
 //	Align a pair of genome sequences.
 int main (int argc, char * const argv[]) {
-	int32_t l, m, k, match = 2, mismatch = 2, gap_open = 3, gap_extension = 1;	// default parameters for genome sequence alignment
+    // default parameters for genome sequence alignment
+	//int32_t l, m, k, match = 2, mismatch = 2, gap_open = 3, gap_extension = 1;
+    // from Mengyao's example about the importance of using all three matrices in traceback.
+    int32_t l, m, k, match = 2, mismatch = 1, gap_open = 2, gap_extension = 1;
+
+
 	// reference sequence
     /*
 	char ref_seq[40] = {'C', 'A', 'G', 'C', 'C', 'T', 'T', 'T', 'C', 'T', 'G', 'A', 'C', 'C', 'C', 'G', 'G', 'A', 'A', 'A', 'T', 
@@ -156,9 +161,10 @@ int main (int argc, char * const argv[]) {
 	//ssw_write(result, ref_seq, read_seq, nt_table);
 
 	result = ssw_fill (profile, ref_num_1, strlen(ref_seq_1), gap_open, gap_extension, 1, 0, 0, 15, 0, NULL);
-    print_score_matrix(strlen(ref_seq_1), strlen(read_seq), result);
+    print_score_matrix(ref_seq_1, strlen(ref_seq_1), read_seq, strlen(read_seq), result);
+
 	result = ssw_fill (profile, ref_num_2, strlen(ref_seq_2), gap_open, gap_extension, 1, 0, 0, 15, 1, result);
-    print_score_matrix(strlen(ref_seq_2), strlen(read_seq), result);
+    print_score_matrix(ref_seq_2, strlen(ref_seq_2), read_seq, strlen(read_seq), result);
 
     /*
     int16_t* t;

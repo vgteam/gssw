@@ -45,7 +45,9 @@ typedef struct {
 	int32_t ref_end2;
 	uint32_t* cigar;	
 	int32_t cigarLen;
-    void* mH;
+    __m128i* mH;
+    __m128i* mE;
+    __m128i* mF;
     __m128i* pvE;
     __m128i* pvHStore;
 } s_align;
@@ -182,26 +184,25 @@ void align_destroy (s_align* a);
 */
 void align_clear_matrix_and_pvE (s_align* a);
 
-/*! @function       Print score matrix, 8-bit score version.
-    @param refLen   Reference length.
-    @param readLen  Read length.
-    @param mH       Score matrix.
-*/
-void print_score_matrix_byte (int32_t refLen, int32_t readLen, uint8_t* mH);
-
-/*! @function       Print score matrix, 16-bit score verison.
-    @param refLen   Reference length.
-    @param readLen  Read length.
-    @param mH       Score matrix.
-*/
-void print_score_matrix_word (int32_t refLen, int32_t readLen, uint16_t* mH);
-
 /*! @function       Print score matrix, determines stride from result score
     @param refLen   Reference length.
     @param readLen  Read length.
     @param result   Alignment result.
 */
-void print_score_matrix (int32_t refLen, int32_t readLen, s_align* result);
+void print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen, s_align* alignment);
+
+
+/*! @function         Return 1 if the alignment is in 16/128bit (byte sized) or 0 if word-sized.
+    @param alignment  Alignment structure.
+*/
+int is_byte (s_align* alignment);
+
+/*! @function         Generate a traceback of the given alignment, using H, E, and F matrices
+    @param alignment  Alignment structure.
+    @param readPos    Starting position of alignment in reference.
+    @param readPos    Starting position of alignment in read.
+*/
+//cigar* traceback (s_align* alignment, int32_t readPos, int32_t refPos);
 
 #ifdef __cplusplus
 }
