@@ -167,7 +167,6 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 
     // initialize pvE
     __m128i* pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
-    __m128i* vE = (__m128i*) calloc(segLen, sizeof(__m128i));
     if (last_pvE == NULL) last_pvE = calloc(segLen, sizeof(__m128i));
     if (last_pvHStore == NULL) last_pvHStore = calloc(segLen, sizeof(__m128i));
     if (use_seed) {
@@ -267,7 +266,6 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 			vF = _mm_subs_epu8(vF, vGapE);
 			vF = _mm_max_epu8(vF, vH);
 			_mm_store_si128(pvF + j, vF);
-			_mm_store_si128(vE + j, e);
 
             /* Save E */
 			_mm_store_si128(pvE + j, e);
@@ -286,6 +284,7 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
         /*  we are at the end, we need to shift the vF value over */
         /*  to the next column. */
         vF = _mm_slli_si128 (vF, 1);
+
         vTemp = _mm_subs_epu8 (vH, vGapO);
 		vTemp = _mm_subs_epu8 (vF, vTemp);
 		vTemp = _mm_cmpeq_epi8 (vTemp, vZero);
@@ -295,6 +294,7 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
             vH = _mm_max_epu8 (vH, vF);
 			vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
             _mm_store_si128 (pvHStore + j, vH);
+
             vF = _mm_subs_epu8 (vF, vGapE);
 
             j++;
@@ -339,7 +339,7 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 		}
 
         // save the current column
-        
+
         /*
         size_t offset = (i * readLen);
         memcpy(mH + offset, pvHStore, segSize);
@@ -371,7 +371,7 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
         for (j = 0; LIKELY(j < segLen); ++j) {
             uint8_t* t;
             int32_t ti;
-            for (t = (uint8_t*)&(vE[j]), ti = 0; ti < 16; ++ti) {
+            for (t = (uint8_t*)&(pvE[j]), ti = 0; ti < 16; ++ti) {
                 //fprintf(stdout, "%d\t", *t++);
                 ((uint8_t*)mE)[(i+1)*readLen + ti*segLen + j] = *t++;
             }
@@ -1189,9 +1189,9 @@ void print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen,
             fprintf(stdout, "%c\t", read[j]);
             for (i = 0; LIKELY(i < refLen); ++i) {
                 fprintf(stdout, "(%u, %u) %u %u %u\t", i, j,
-                        //((uint8_t*)mH)[i*readLensegSize + segLen*(j/16)+j],
-                        //((uint8_t*)mE)[i*readLen*segSize + segLen*(j/16)+j],
-                        //((uint8_t*)mF)[i*readLen*segSize + segLen*(j/16)+j]);
+                        //((uint8_t*)mH)[i*readLen*segSize + segLen*(j/16)+j],
+                        //((uint8_t*)mE)[i*readLen*segSize + segLen*(j/16)+(j > 0 ? j-1 : 0)],
+                        //((uint8_t*)mF)[(i > 0 ? i-1 : 0)*readLen*segSize + segLen*(j/16)+j]);
                         ((uint8_t*)mH)[i*readLen + j],
                         ((uint8_t*)mE)[i*readLen + j],
                         ((uint8_t*)mF)[i*readLen + j]);
