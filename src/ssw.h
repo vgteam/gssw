@@ -52,6 +52,27 @@ typedef struct {
     __m128i* pvHStore;
 } s_align;
 
+typedef struct {
+	uint16_t score;
+	int32_t ref;	 //0-based position 
+	int32_t read;    //alignment ending position on read, 0-based 
+} alignment_end;
+
+typedef struct {
+	uint32_t* seq;
+	int32_t length;
+} cigar;
+
+struct _profile{
+	__m128i* profile_byte;	// 0: none
+	__m128i* profile_word;	// 0: none
+	const int8_t* read;
+	const int8_t* mat;
+	int32_t readLen;
+	int32_t n;
+	uint8_t bias;
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -191,6 +212,19 @@ void align_clear_matrix_and_pvE (s_align* a);
 */
 void print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen, s_align* alignment);
 
+/*! @function         Trace back alignment across score matrix stored in alignment structure
+    @param alignment  Alignment structure.
+    @param end        Alignment ending position.
+*/
+void trace_back_byte (s_align* alignment,
+                      int32_t refEnd,
+                      int32_t readEnd,
+                      int32_t refLen,
+                      int32_t readLen,
+                      int32_t match,
+                      int32_t mismatch,
+                      int32_t gap_open,
+                      int32_t gap_extension);
 
 /*! @function         Return 1 if the alignment is in 16/128bit (byte sized) or 0 if word-sized.
     @param alignment  Alignment structure.

@@ -65,26 +65,6 @@
  */
 #define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
 
-typedef struct {
-	uint16_t score;
-	int32_t ref;	 //0-based position 
-	int32_t read;    //alignment ending position on read, 0-based 
-} alignment_end;
-
-typedef struct {
-	uint32_t* seq;
-	int32_t length;
-} cigar;
-
-struct _profile{
-	__m128i* profile_byte;	// 0: none
-	__m128i* profile_word;	// 0: none
-	const int8_t* read;
-	const int8_t* mat;
-	int32_t readLen;
-	int32_t n;
-	uint8_t bias;
-};
 
 /* Generate query profile rearrange query sequence & calculate the weight of match/mismatch. */
 __m128i* qP_byte (const int8_t* read_num,
@@ -1228,7 +1208,49 @@ int is_byte (s_align* alignment) {
     }
 }
 
+void trace_back_byte (s_align* alignment,
+                      int32_t refEnd,
+                      int32_t readEnd,
+                      int32_t refLen,
+                      int32_t readLen,
+                      int32_t match,
+                      int32_t mismatch,
+                      int32_t gap_open,
+                      int32_t gap_extension) {
 
+    uint8_t* mH = (uint8_t*)alignment->mH;
+    int32_t i = refEnd;
+    int32_t j = readEnd;
+    // find maximum
+    uint8_t h = mH[readLen*i + j];
+    printf("h=%i i=%i j=%i\n", h, i, j);
+    while (LIKELY(h != 0)) {
+        // look at neighbors
+        int32_t d = mH[readLen*(i-1) + (j-1)];
+        int32_t l = mH[readLen*(i-1) + j];
+        int32_t u = mH[readLen*i + (j-1)];
+        int32_t n = max(d, max(u, l));
+        if (d == n && d + match == h) {
+            printf("m");
+            h = d;
+            --i; --j;
+        } else if (l == n && (l - gap_open == h || l - gap_extension == h)) {
+            printf("d");
+            h = l;
+            --i;
+        } else if (u == n && (u - gap_open == h || u - gap_extension == h)) {
+            printf("i");
+            h = u;
+            --j;
+        } else {
+            fprintf(stderr, "\nhow did i get here?\n");
+            printf("m");
+            h = d; --i; --j;
+        }
+    }
+
+    printf("\n");
+}
 
 
 /*
