@@ -45,9 +45,9 @@ typedef struct {
 	int32_t ref_end2;
 	uint32_t* cigar;
 	int32_t cigarLen;
-    __m128i* mH;
-    __m128i* mE;
-    __m128i* mF;
+    void* mH;
+    //__m128i* mE;
+    //__m128i* mF;
     __m128i* pvE;
     __m128i* pvHStore;
 } s_align;
@@ -254,6 +254,7 @@ int is_byte (s_align* alignment);
 
 void add_element(cigar* c, char type, uint32_t length);
 void reverse_cigar(cigar* c);
+void print_cigar(cigar* c);
 
 #ifdef __cplusplus
 }
