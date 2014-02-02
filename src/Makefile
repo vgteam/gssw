@@ -1,5 +1,5 @@
 CC=			gcc
-CFLAGS=-Wall -O3 #-pg 
+CFLAGS=-Wall -O3 -g #-pg 
 LOBJS=		ssw.o	
 PROG=		ssw_example
 all:$(PROG)

@@ -162,7 +162,7 @@ int main (int argc, char * const argv[]) {
 
 	result = ssw_fill (profile, ref_num_1, strlen(ref_seq_1), gap_open, gap_extension, 1, 0, 0, 15, 0, NULL);
     print_score_matrix(ref_seq_1, strlen(ref_seq_1), read_seq, strlen(read_seq), result);
-    cigar* path = trace_back_byte (result, result->ref_end1, result->read_end1, ref_seq_1, strlen(ref_seq_1), read_seq, strlen(read_seq), match, mismatch, gap_open, gap_extension);
+    cigar* path = trace_back (result, result->ref_end1, result->read_end1, ref_seq_1, strlen(ref_seq_1), read_seq, strlen(read_seq), match, mismatch, gap_open, gap_extension);
     print_cigar(path); printf("\n");
 
 	result = ssw_fill (profile, ref_num_2, strlen(ref_seq_2), gap_open, gap_extension, 1, 0, 0, 15, 1, result);

@@ -85,6 +85,18 @@ struct _profile{
 	uint8_t bias;
 };
 
+//struct node;
+//typedef struct node s_node;
+typedef struct node node;
+typedef struct node {
+    char* seq;
+    char* id;
+    node* prev;
+    node* next;
+    s_align* alignment;
+    cigar* path;
+} node;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -239,6 +251,30 @@ cigar* trace_back_byte (s_align* alignment,
                         int32_t mismatch,
                         int32_t gap_open,
                         int32_t gap_extension);
+
+cigar* trace_back_word (s_align* alignment,
+                        int32_t refEnd,
+                        int32_t readEnd,
+                        char* ref,
+                        int32_t refLen,
+                        char* read,
+                        int32_t readLen,
+                        int32_t match,
+                        int32_t mismatch,
+                        int32_t gap_open,
+                        int32_t gap_extension);
+
+cigar* trace_back (s_align* alignment,
+                   int32_t refEnd,
+                   int32_t readEnd,
+                   char* ref,
+                   int32_t refLen,
+                   char* read,
+                   int32_t readLen,
+                   int32_t match,
+                   int32_t mismatch,
+                   int32_t gap_open,
+                   int32_t gap_extension);
 
 /*! @function         Return 1 if the alignment is in 16/128bit (byte sized) or 0 if word-sized.
     @param alignment  Alignment structure.
