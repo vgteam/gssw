@@ -115,10 +115,14 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
                                                    is set to 0, it will not be used */
                              uint8_t bias,  /* Shift 0 point to a positive value. */
                              int32_t maskLen,
-                             uint8_t use_seed,
+                             /* to save and export the matrix */
                              uint8_t** pmH,
-                             __m128i** last_pvHStore,
-                             __m128i** last_pvE) {
+                             __m128i** save_pvHStore,
+                             __m128i** save_pvE,
+                             /* to seed the alignment */
+                             uint8_t use_seed,
+                             __m128i* seed_pvHStore,
+                             __m128i* seed_pvE) {
 
 #define max16(m, vm) (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 8)); \
 					  (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 4)); \
@@ -131,48 +135,48 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 	int32_t end_ref = -1; /* 0_based best alignment ending point; Initialized as isn't aligned -1. */
 	int32_t segLen = (readLen + 15) / 16; /* number of segment */
 
-	/* Define 16 byte 0 vector. */
-	__m128i vZero = _mm_set1_epi32(0);
-
-	//__m128i* pvHStore = (__m128i*) calloc(segLen, sizeof(__m128i));
-	//__m128i* pvHLoad = (__m128i*) calloc(segLen, sizeof(__m128i));
-    //__m128i* pvHmax = (__m128i*) calloc(segLen, sizeof(__m128i));
+    /* Initialize buffers used in alignment */
 	__m128i* pvHStore;
     __m128i* pvHLoad;
     __m128i* pvHmax;
-    posix_memalign((void**)&pvHStore, sizeof(__m128i), segLen*sizeof(__m128i));
-    posix_memalign((void**)&pvHLoad,  sizeof(__m128i), segLen*sizeof(__m128i));
-    posix_memalign((void**)&pvHmax,   sizeof(__m128i), segLen*sizeof(__m128i));
-    // calloc workaround
-    memset(pvHStore, 0, segLen*sizeof(__m128i));
-    memset(pvHLoad,  0, segLen*sizeof(__m128i));
-    memset(pvHmax,   0, segLen*sizeof(__m128i));
+    __m128i* pvE;
+    uint8_t* mH; // used to save matrix for external traceback
+    /* Note use of aligned memory.  Return value of 0 means success for posix_memalign. */
+    if (!(!posix_memalign((void**)&pvHStore,     sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&pvHLoad,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&pvHmax,       sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&pvE,          sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)save_pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)save_pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&mH,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)))) {
+        fprintf(stderr, "Could not allocate memory required for alignment buffers.\n");
+        exit(1);
+    }
 
-    // initialize pvE
-    __m128i* pvE;// = (__m128i*) calloc(segLen, sizeof(__m128i));
-    posix_memalign((void**)&pvE, sizeof(__m128i), segLen*sizeof(__m128i));
-    memset(pvE, 0, sizeof(__m128i));
-    if (*last_pvE == NULL) {
-        //last_pvE = calloc(segLen, sizeof(__m128i));
-        posix_memalign((void**)last_pvE, sizeof(__m128i), segLen*sizeof(__m128i));
-        memset(*last_pvE, 0, segLen*sizeof(__m128i));
-    }
-    if (*last_pvHStore == NULL) {
-        //last_pvHStore = calloc(segLen, sizeof(__m128i));
-        posix_memalign((void**)last_pvHStore, sizeof(__m128i), segLen*sizeof(__m128i));
-        memset(*last_pvHStore, 0, segLen*sizeof(__m128i));
-    }
+    /* Workaround because we don't have an aligned calloc */
+    memset(pvHStore,       0, segLen*sizeof(__m128i));
+    memset(pvHLoad,        0, segLen*sizeof(__m128i));
+    memset(pvHmax,         0, segLen*sizeof(__m128i));
+    memset(pvE,            0, segLen*sizeof(__m128i));
+    memset(*save_pvE,      0, segLen*sizeof(__m128i));
+    memset(*save_pvHStore, 0, segLen*sizeof(__m128i));
+    memset(mH,             0, segLen*refLen*sizeof(__m128i));
+
+    /* if we are running a seeded alignment, copy over the seeds */
     if (use_seed) {
-        memcpy(pvE, *last_pvE, segLen*sizeof(__m128i));
-        memcpy(pvHStore, *last_pvHStore, segLen*sizeof(__m128i));
+        memcpy(pvE, seed_pvE, segLen*sizeof(__m128i));
+        memcpy(pvHStore, seed_pvHStore, segLen*sizeof(__m128i));
     }
 
-    uint8_t* mH;// = (uint8_t*) calloc(segLen*refLen, sizeof(__m128i));
-    posix_memalign((void**)&mH, sizeof(__m128i), segLen*refLen*sizeof(__m128i));
-    memset(mH, 0, segLen*refLen*sizeof(__m128i));
+    /* Set external H matrix pointer */
     *pmH = mH;
 
+	/* Define 16 byte 0 vector. */
+	__m128i vZero = _mm_set1_epi32(0);
+
+    /* Used for iteration */
 	int32_t i, j;
+
     /* 16 byte insertion begin vector */
 	__m128i vGapO = _mm_set1_epi8(weight_gapO);
 
@@ -186,9 +190,6 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 	__m128i vMaxMark = vZero; /* Trace the highest score till the previous column. */
 	__m128i vTemp;
 	int32_t begin = 0, end = refLen, step = 1;
-//	int32_t distance = readLen * 2 / 3;
-//	int32_t distance = readLen / 2;
-//	int32_t distance = readLen;
 
 	/* outer loop to process the reference sequence */
 	if (ref_dir == 1) {
@@ -343,8 +344,8 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
         
     //fprintf(stderr, "%p %p %p %p %p %p\n", *pmH, mH, pvHmax, pvE, pvHLoad, pvHStore);
     // save the last vH
-    memcpy(*last_pvE, pvE, segLen*sizeof(__m128i));
-    memcpy(*last_pvHStore, pvHStore, segLen*sizeof(__m128i));
+    memcpy(*save_pvE, pvE, segLen*sizeof(__m128i));
+    memcpy(*save_pvHStore, pvHStore, segLen*sizeof(__m128i));
 
 	/* Trace the alignment ending position on read. */
 	uint8_t *t = (uint8_t*)pvHmax;
@@ -407,10 +408,14 @@ alignment_end* sw_sse2_word (const int8_t* ref,
 						     __m128i* vProfile,
 							 uint16_t terminate,
 							 int32_t maskLen,
-                             uint8_t use_seed,
+                             /* to save and export the matrix */
                              uint16_t** pmH,
-                             __m128i** last_pvHStore,
-                             __m128i** last_pvE) {
+                             __m128i** save_pvHStore,
+                             __m128i** save_pvE,
+                             /* to seed the alignment */
+                             uint8_t use_seed,
+                             __m128i* seed_pvHStore,
+                             __m128i* seed_pvE) {
 
 #define max8(m, vm) (vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 8)); \
 					(vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 4)); \
@@ -422,24 +427,49 @@ alignment_end* sw_sse2_word (const int8_t* ref,
 	int32_t end_ref = 0; /* 1_based best alignment ending point; Initialized as isn't aligned - 0. */
 	int32_t segLen = (readLen + 7) / 8; /* number of segment */
 
+    /* Initialize buffers used in alignment */
+	__m128i* pvHStore;
+    __m128i* pvHLoad;
+    __m128i* pvHmax;
+    __m128i* pvE;
+    uint16_t* mH; // used to save matrix for external traceback
+    /* Note use of aligned memory */
+
+    if (!(!posix_memalign((void**)&pvHStore,     sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&pvHLoad,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&pvHmax,       sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&pvE,          sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)save_pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)save_pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&mH,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)))) {
+        fprintf(stderr, "Could not allocate memory required for alignment buffers.\n");
+        exit(1);
+    }
+
+    /* Workaround because we don't have an aligned calloc */
+    memset(pvHStore,       0, segLen*sizeof(__m128i));
+    memset(pvHLoad,        0, segLen*sizeof(__m128i));
+    memset(pvHmax,         0, segLen*sizeof(__m128i));
+    memset(pvE,            0, segLen*sizeof(__m128i));
+    memset(*save_pvE,      0, segLen*sizeof(__m128i));
+    memset(*save_pvHStore, 0, segLen*sizeof(__m128i));
+    memset(mH,             0, segLen*refLen*sizeof(__m128i));
+
+    /* if we are running a seeded alignment, copy over the seeds */
+    if (use_seed) {
+        memcpy(pvE, seed_pvE, segLen*sizeof(__m128i));
+        memcpy(pvHStore, seed_pvHStore, segLen*sizeof(__m128i));
+    }
+
+    /* Set external H matrix pointer */
+    *pmH = mH;
+
 	/* Define 16 byte 0 vector. */
 	__m128i vZero = _mm_set1_epi32(0);
 
-	__m128i* pvHStore = (__m128i*) calloc(segLen, sizeof(__m128i));
-	__m128i* pvHLoad = (__m128i*) calloc(segLen, sizeof(__m128i));
-
-    // initialize pvE
-    __m128i* pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
-    if (last_pvE == NULL) last_pvE = calloc(segLen, sizeof(__m128i));
-    if (last_pvHStore == NULL) last_pvHStore = calloc(segLen, sizeof(__m128i));
-    if (use_seed) {
-        memcpy(pvE, last_pvE, segLen*sizeof(__m128i));
-        memcpy(pvHStore, last_pvHStore, segLen*sizeof(__m128i));
-    }
-
-	__m128i* pvHmax = (__m128i*) calloc(segLen, sizeof(__m128i));
-
+    /* Used for iteration */
 	int32_t i, j, k;
+
 	/* 16 byte insertion begin vector */
 	__m128i vGapO = _mm_set1_epi16(weight_gapO);
 
@@ -451,9 +481,6 @@ alignment_end* sw_sse2_word (const int8_t* ref,
 	__m128i vMaxMark = vZero; /* Trace the highest score till the previous column. */
 	__m128i vTemp;
 	int32_t begin = 0, end = refLen, step = 1;
-
-    uint16_t* mH = (uint16_t*) calloc(segLen*refLen, sizeof(__m128i));
-    *pmH = mH;
 
 	/* outer loop to process the reference sequence */
 	if (ref_dir == 1) {
@@ -546,18 +573,6 @@ end:
             }
             //fprintf(stdout, "\n");
         }
-/*
-        for (j = 0; LIKELY(j < segLen); ++j) {
-            uint16_t* t;
-            int32_t ti;
-            vH = pvHStore[j];
-            for (t = (uint16_t*)&vH, ti = 0; ti < 8; ++ti) {
-                //fprintf(stdout, "%d\t", *t++);
-                mH[i*readLen + ti*segLen + j] = *t++;
-            }
-            //fprintf(stdout, "\n");
-        }
-        */
 
 		/* Record the max score of current column. */
 		//max8(maxColumn[i], vMaxColumn);
@@ -565,8 +580,8 @@ end:
 
 	}
 
-    memcpy(last_pvE, pvE, segLen*sizeof(__m128i));
-    memcpy(last_pvHStore, pvHStore, segLen*sizeof(__m128i));
+    memcpy(save_pvE, pvE, segLen*sizeof(__m128i));
+    memcpy(save_pvHStore, pvHStore, segLen*sizeof(__m128i));
 
 
 	/* Trace the alignment ending position on read. */
@@ -580,10 +595,10 @@ end:
 		}
 	}
 
+	free(pvE);
 	free(pvHmax);
-	free(pvE); // now done outside in calling context
 	free(pvHLoad);
-	free(pvHStore);
+    free(pvHStore);
 
 	/* Find the most possible 2nd best alignment. */
 	alignment_end* bests = (alignment_end*) calloc(2, sizeof(alignment_end));
@@ -658,33 +673,34 @@ s_align* ssw_fill (const s_profile* prof,
 		fprintf(stderr, "When maskLen < 15, the function ssw_align doesn't return 2nd best alignment information.\n");
 	}
 
+    __m128i* seed_pvHStore = NULL;
+    __m128i* seed_pvE = NULL;
     if (use_seed) {
-        r->pvHStore = seed->pvHStore;
-        r->pvE = seed->pvE;
+        seed_pvHStore = seed->pvHStore;
+        seed_pvE = seed->pvE;
     }
 
 	// Find the alignment scores and ending positions
 	if (prof->profile_byte) {
 
 		bests = sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen,
-                             use_seed, (uint8_t**)&r->mH, &r->pvHStore, &r->pvE);
+                             (uint8_t**)&r->mH, &r->pvHStore, &r->pvE,
+                             use_seed, seed_pvHStore, seed_pvE);
 
 		if (prof->profile_word && bests[0].score == 255) {
 			free(bests);
             align_clear_matrix_and_pvE(r);
-            if (use_seed) {
-                r->pvHStore = seed->pvHStore;
-                r->pvE = seed->pvE;
-            }
 			bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
-                                 use_seed, (uint16_t**)&r->mH, &r->pvHStore, &r->pvE);
+                                 (uint16_t**)&r->mH, &r->pvHStore, &r->pvE,
+                                 use_seed, seed_pvHStore, seed_pvE);
         } else if (bests[0].score == 255) {
 			fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
 			return 0;
 		}
 	} else if (prof->profile_word) {
 		bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
-                             use_seed, (uint16_t**)&r->mH, &r->pvHStore, &r->pvE);
+                             (uint16_t**)&r->mH, &r->pvHStore, &r->pvE,
+                             use_seed, seed_pvHStore, seed_pvE);
     } else {
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
 		return 0;
@@ -745,20 +761,15 @@ void print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen,
             }
             fprintf(stdout, "\n");
         }
-
-
     } else {
         uint16_t* mH = alignment->mH;
-        int32_t segLen =  (readLen + 7) / 8;
-        for (i = 0; LIKELY(i < refLen); ++i) {
-            for (j = 0; LIKELY(j < segLen); ++j) {
-                int32_t ti;
-                for (ti = 0; ti < 8; ++ti) {
-                    fprintf(stdout, "(%u, %u) %u\t", i, j,
-                            ((uint16_t*)mH)[i*readLen + j]);
-                }
-                fprintf(stdout, "\n");
+        for (j = 0; LIKELY(j < readLen); ++j) {
+            fprintf(stdout, "%c\t", read[j]);
+            for (i = 0; LIKELY(i < refLen); ++i) {
+                fprintf(stdout, "(%u, %u) %u\t", i, j,
+                        ((uint16_t*)mH)[i*readLen + j]);
             }
+            fprintf(stdout, "\n");
         }
     }
 
@@ -829,7 +840,7 @@ cigar* trace_back_byte (s_align* alignment,
     int32_t j = readEnd;
     // find maximum
     uint8_t h = mH[readLen*i + j];
-	cigar* result = (cigar*)malloc(sizeof(cigar));
+	cigar* result = (cigar*)calloc(1, sizeof(cigar));
     result->length = 0;
 
     while (LIKELY(h != 0 && i > 0 && j > 0)) {

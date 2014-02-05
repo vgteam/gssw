@@ -75,20 +75,16 @@ int main (int argc, char * const argv[]) {
     print_score_matrix(ref_seq_1, strlen(ref_seq_1), read_seq, strlen(read_seq), result1);
     cigar* path = trace_back (result1, result1->ref_end1, result1->read_end1, ref_seq_1, strlen(ref_seq_1), read_seq, strlen(read_seq), match, mismatch, gap_open, gap_extension);
     print_cigar(path); printf("\n");
-    //cigar_destroy(path);
+    cigar_destroy(path);
 
 	s_align* result2 = ssw_fill (profile, ref_num_2, strlen(ref_seq_2), gap_open, gap_extension, 1, 0, 0, 15, 1, result1);
     print_score_matrix(ref_seq_2, strlen(ref_seq_2), read_seq, strlen(read_seq), result2);
+    path = trace_back (result2, result2->ref_end1, result2->read_end1, ref_seq_2, strlen(ref_seq_2), read_seq, strlen(read_seq), match, mismatch, gap_open, gap_extension);
+    print_cigar(path); printf("\n");
+    cigar_destroy(path);
 
-    /*
-    int16_t* t;
-    int32_t ti;
-    for (t = (int16_t*)&result->pvE, ti = 0; ti < 8; ++ti) fprintf(stdout, "%d\t", *t++);
-    fprintf(stdout, "\n");
-    */
-
-    //align_destroy(result1);
-    //align_destroy(result2);
+    align_destroy(result1);
+    align_destroy(result2);
     init_destroy(profile);
 
 	free(mat);
