@@ -24,6 +24,7 @@
 */
 
 /* Contact: Mengyao Zhao <zhangmp@bc.edu> */
+/* Contact: Erik Garrison <erik.garrison@bc.edu> */
 
 /*
  *  ssw.c
@@ -31,7 +32,7 @@
  *  Created by Mengyao Zhao on 6/22/10.
  *  Copyright 2010 Boston College. All rights reserved.
  *	Version 0.1.4
- *	Last revision by Mengyao Zhao on 12/07/12.
+ *	Last revision by Erik Garrison 01/02/2014
  *
  */
 
@@ -133,25 +134,46 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 	/* Define 16 byte 0 vector. */
 	__m128i vZero = _mm_set1_epi32(0);
 
-	__m128i* pvHStore = (__m128i*) calloc(segLen, sizeof(__m128i));
-	__m128i* pvHLoad = (__m128i*) calloc(segLen, sizeof(__m128i));
+	//__m128i* pvHStore = (__m128i*) calloc(segLen, sizeof(__m128i));
+	//__m128i* pvHLoad = (__m128i*) calloc(segLen, sizeof(__m128i));
+    //__m128i* pvHmax = (__m128i*) calloc(segLen, sizeof(__m128i));
+	__m128i* pvHStore;
+    __m128i* pvHLoad;
+    __m128i* pvHmax;
+    posix_memalign((void**)&pvHStore, sizeof(__m128i), segLen*sizeof(__m128i));
+    posix_memalign((void**)&pvHLoad,  sizeof(__m128i), segLen*sizeof(__m128i));
+    posix_memalign((void**)&pvHmax,   sizeof(__m128i), segLen*sizeof(__m128i));
+    // calloc workaround
+    memset(pvHStore, 0, segLen*sizeof(__m128i));
+    memset(pvHLoad,  0, segLen*sizeof(__m128i));
+    memset(pvHmax,   0, segLen*sizeof(__m128i));
 
     // initialize pvE
-    __m128i* pvE = (__m128i*) calloc(segLen, sizeof(__m128i));
-    if (last_pvE == NULL) last_pvE = calloc(segLen, sizeof(__m128i));
-    if (last_pvHStore == NULL) last_pvHStore = calloc(segLen, sizeof(__m128i));
+    __m128i* pvE;// = (__m128i*) calloc(segLen, sizeof(__m128i));
+    posix_memalign((void**)&pvE, sizeof(__m128i), segLen*sizeof(__m128i));
+    memset(pvE, 0, sizeof(__m128i));
+    if (*last_pvE == NULL) {
+        //last_pvE = calloc(segLen, sizeof(__m128i));
+        posix_memalign((void**)last_pvE, sizeof(__m128i), segLen*sizeof(__m128i));
+        memset(*last_pvE, 0, segLen*sizeof(__m128i));
+    }
+    if (*last_pvHStore == NULL) {
+        //last_pvHStore = calloc(segLen, sizeof(__m128i));
+        posix_memalign((void**)last_pvHStore, sizeof(__m128i), segLen*sizeof(__m128i));
+        memset(*last_pvHStore, 0, segLen*sizeof(__m128i));
+    }
     if (use_seed) {
-        memcpy(pvE, last_pvE, segLen*sizeof(__m128i));
-        memcpy(pvHStore, last_pvHStore, segLen*sizeof(__m128i));
+        memcpy(pvE, *last_pvE, segLen*sizeof(__m128i));
+        memcpy(pvHStore, *last_pvHStore, segLen*sizeof(__m128i));
     }
 
-	__m128i* pvHmax = (__m128i*) calloc(segLen, sizeof(__m128i));
-
-    uint8_t* mH = (uint8_t*) calloc(segLen*refLen, sizeof(__m128i));
+    uint8_t* mH;// = (uint8_t*) calloc(segLen*refLen, sizeof(__m128i));
+    posix_memalign((void**)&mH, sizeof(__m128i), segLen*refLen*sizeof(__m128i));
+    memset(mH, 0, segLen*refLen*sizeof(__m128i));
     *pmH = mH;
 
 	int32_t i, j;
-	/* 16 byte insertion begin vector */
+    /* 16 byte insertion begin vector */
 	__m128i vGapO = _mm_set1_epi8(weight_gapO);
 
 	/* 16 byte insertion extension vector */
@@ -182,7 +204,8 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 		//max16(maxColumn[i], vMaxColumn);
 		//fprintf(stderr, "middle[%d]: %d\n", i, maxColumn[i]);
 
-		__m128i vH = pvHStore[segLen - 1];
+		//__m128i vH = pvHStore[segLen - 1];
+        __m128i vH = _mm_load_si128 (pvHStore + (segLen - 1));
 		vH = _mm_slli_si128 (vH, 1); /* Shift the 128-bit value in vH left by 1 byte. */
 		__m128i* vP = vProfile + ref[i] * segLen; /* Right part of the vProfile */
 
@@ -304,10 +327,10 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
             int32_t ti;
             vH = pvHStore[j];
             for (t = (uint8_t*)&vH, ti = 0; ti < 16; ++ti) {
-                //fprintf(stdout, "%d\t", *t);
+                //fprintf(stderr, "%d\t", *t);
                 ((uint8_t*)mH)[i*readLen + ti*segLen + j] = *t++;
             }
-            //fprintf(stdout, "\n");
+            //fprintf(stderr, "\n");
         }
 
 
@@ -318,9 +341,10 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 
 	}
         
+    //fprintf(stderr, "%p %p %p %p %p %p\n", *pmH, mH, pvHmax, pvE, pvHLoad, pvHStore);
     // save the last vH
-    memcpy(last_pvE, pvE, segLen*sizeof(__m128i));
-    memcpy(last_pvHStore, pvHStore, segLen*sizeof(__m128i));
+    memcpy(*last_pvE, pvE, segLen*sizeof(__m128i));
+    memcpy(*last_pvHStore, pvHStore, segLen*sizeof(__m128i));
 
 	/* Trace the alignment ending position on read. */
 	uint8_t *t = (uint8_t*)pvHmax;
@@ -333,10 +357,12 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 		}
 	}
 
-	free(pvHmax);
+    //fprintf(stderr, "%p %p %p %p %p %p\n", *pmH, mH, pvHmax, pvE, pvHLoad, pvHStore);
+
 	free(pvE);
+	free(pvHmax);
 	free(pvHLoad);
-	free(pvHStore);
+    free(pvHStore);
 
 	/* Find the most possible 2nd best alignment. */
 	alignment_end* bests = (alignment_end*) calloc(2, sizeof(alignment_end));
@@ -624,11 +650,10 @@ s_align* ssw_fill (const s_profile* prof,
 
 	alignment_end* bests = 0;
 	int32_t readLen = prof->readLen;
-	s_align* r = (s_align*)calloc(1, sizeof(s_align));
+    s_align* r = (s_align*)calloc(1, sizeof(s_align));
+    align_init(r);
 	r->ref_begin1 = -1;
 	r->read_begin1 = -1;
-	r->cigar = 0;
-	r->cigarLen = 0;
 	if (maskLen < 15) {
 		fprintf(stderr, "When maskLen < 15, the function ssw_align doesn't return 2nd best alignment information.\n");
 	}
@@ -643,7 +668,6 @@ s_align* ssw_fill (const s_profile* prof,
 
 		bests = sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen,
                              use_seed, (uint8_t**)&r->mH, &r->pvHStore, &r->pvE);
-        //print_score_matrix_byte(refLen, readLen, (uint8_t*)r->mH);
 
 		if (prof->profile_word && bests[0].score == 255) {
 			free(bests);
@@ -683,10 +707,11 @@ s_align* ssw_fill (const s_profile* prof,
 void align_init (s_align* a) {
     a->pvHStore = NULL;
     a->pvE = NULL;
+    a->mH = NULL;
 }
 
 void align_destroy (s_align* a) {
-	free(a->cigar);
+	//free(a->cigar);
     align_clear_matrix_and_pvE(a);
 	free(a);
 }
@@ -695,7 +720,9 @@ void align_clear_matrix_and_pvE (s_align* a) {
     free(a->mH);
     a->mH = NULL;
     free(a->pvHStore);
+    a->pvHStore = NULL;
     free(a->pvE);
+    a->pvE = NULL;
 }
 
 void print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen, s_align* alignment) {
@@ -943,3 +970,8 @@ void print_cigar(cigar* c) {
     }
 }
 
+void cigar_destroy(cigar* c) {
+    free(c->elements);
+    c->elements = NULL;
+    free(c);
+}
