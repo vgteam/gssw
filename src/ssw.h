@@ -90,8 +90,10 @@ typedef struct node {
     char* seq; // sequence
     int8_t* num; // numerical conversion of seq
     int32_t len;
-    node* prev;
-    node* next;
+    node** prev;
+    int32_t count_prev;
+    node** next;
+    int32_t count_next;
     s_align* alignment;
 } node;
 
@@ -291,8 +293,10 @@ void reverse_cigar(cigar* c);
 void print_cigar(cigar* c);
 void cigar_destroy(cigar* c);
 
-node* node_create(char* id, char* seq);
+node* node_create(char* id, char* seq, int8_t* nt_table, int8_t* score_matrix);
 void node_destroy(node* n);
+void node_add_prev(node* n);
+void node_add_next(node* n);
 
 int8_t* create_score_matrix(int32_t match, int32_t mismatch);
 int8_t* create_nt_table(void);

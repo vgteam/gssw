@@ -987,18 +987,41 @@ void cigar_destroy(cigar* c) {
     free(c);
 }
 
-node* node_create(char* id, char* seq) {
+node* node_create(char* id, char* seq, int8_t* nt_table, int8_t* score_matrix) {
     node* n = calloc(1, sizeof(node));
     int32_t len = strlen(seq);
+    int32_t idlen = strlen(id);
     n->len = len;
     n->seq = (char*)malloc(len);
     strncpy(n->seq, seq, len);
-    n->num = (int8_t*)malloc(len);	// the read sequence represented in numbers
-    
+    n->id = (char*)malloc(idlen);
+    strncpy(n->id, id, idlen);
+    n->num = create_num(seq, len, nt_table);
+    n->count_prev = 0; // should these be set == 0 by calloc?
+    n->count_next = 0;
     return n;
 }
 
 void node_destroy(node* n) {
+    free(n->id);
+    free(n->seq);
+    free(n->num);
+    free(n->prev);
+    free(n->next);
+    free(n->alignment);
+    free(n);
+}
+
+void node_add_prev(node* n) {
+    ++n->count_prev;
+    n->prev = (node**)realloc(n->prev, n->count_prev*sizeof(node*));
+    n->prev[n->count_prev -1] = n;
+}
+
+void node_add_next(node* n) {
+    ++n->count_next;
+    n->next = (node**)realloc(n->next, n->count_next*sizeof(node*));
+    n->next[n->count_next -1] = n;
 }
 
 int8_t* create_num(char* seq, int32_t len, int8_t* nt_table) {
