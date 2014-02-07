@@ -86,12 +86,13 @@ struct _profile{
 //typedef struct node s_node;
 typedef struct node node;
 typedef struct node {
-    char* seq;
     char* id;
+    char* seq; // sequence
+    int8_t* num; // numerical conversion of seq
+    int32_t len;
     node* prev;
     node* next;
     s_align* alignment;
-    cigar* path;
 } node;
 
 #ifdef __cplusplus
@@ -289,6 +290,13 @@ void add_element(cigar* c, char type, uint32_t length);
 void reverse_cigar(cigar* c);
 void print_cigar(cigar* c);
 void cigar_destroy(cigar* c);
+
+node* node_create(char* id, char* seq);
+void node_destroy(node* n);
+
+int8_t* create_score_matrix(int32_t match, int32_t mismatch);
+int8_t* create_nt_table(void);
+int8_t* create_num(char* seq, int32_t len, int8_t* nt_table);
 
 #ifdef __cplusplus
 }

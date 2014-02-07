@@ -986,3 +986,58 @@ void cigar_destroy(cigar* c) {
     c->elements = NULL;
     free(c);
 }
+
+node* node_create(char* id, char* seq) {
+    node* n = calloc(1, sizeof(node));
+    int32_t len = strlen(seq);
+    n->len = len;
+    n->seq = (char*)malloc(len);
+    strncpy(n->seq, seq, len);
+    n->num = (int8_t*)malloc(len);	// the read sequence represented in numbers
+    
+    return n;
+}
+
+void node_destroy(node* n) {
+}
+
+int8_t* create_num(char* seq, int32_t len, int8_t* nt_table) {
+    int32_t m;
+    int8_t* num = (int8_t*)malloc(len);
+	for (m = 0; m < len; ++m) num[m] = nt_table[(int)seq[m]];
+    return num;
+}
+
+int8_t* create_score_matrix(int32_t match, int32_t mismatch) {
+	// initialize scoring matrix for genome sequences
+	//  A  C  G  T	N (or other ambiguous code)
+	//  2 -2 -2 -2 	0	A
+	// -2  2 -2 -2 	0	C
+	// -2 -2  2 -2 	0	G
+	// -2 -2 -2  2 	0	T
+	//	0  0  0  0  0	N (or other ambiguous code)
+    int32_t l, k, m;
+	int8_t* mat = (int8_t*)calloc(25, sizeof(int8_t));
+	for (l = k = 0; l < 4; ++l) {
+		for (m = 0; m < 4; ++m) mat[k++] = l == m ? match : - mismatch;	/* weight_match : -weight_mismatch */
+		mat[k++] = 0; // ambiguous base: no penalty
+	}
+	for (m = 0; m < 5; ++m) mat[k++] = 0;
+    return mat;
+}
+
+int8_t* create_nt_table(void) {
+    int8_t* ret_nt_table = calloc(128, sizeof(int8_t));
+    int8_t nt_table[128] = {
+		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+		4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
+	};
+    memcpy(ret_nt_table, nt_table, 128*sizeof(int8_t));
+    return ret_nt_table;
+}
