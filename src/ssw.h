@@ -22,6 +22,12 @@
 struct _profile;
 typedef struct _profile s_profile;
 
+typedef struct {
+    __m128i* pvE;
+    __m128i* pvHStore;
+} s_seed;
+
+
 /*!	@typedef	structure of the alignment result
 	@field	score1	the best alignment score
 	@field	score2	sub-optimal alignment score
@@ -44,8 +50,7 @@ typedef struct {
 	int32_t	read_begin1;
 	int32_t read_end1;
 	int32_t ref_end2;
-    __m128i* pvE;
-    __m128i* pvHStore;
+    s_seed seed;
     void* mH;
 } s_align;
 
@@ -54,13 +59,6 @@ typedef struct {
 	int32_t ref;	 //0-based position
 	int32_t read;    //alignment ending position on read, 0-based
 } alignment_end;
-
-/*
-typedef struct {
-	uint32_t* seq;
-	int32_t length;
-} cigar;
-*/
 
 typedef struct {
     char type;
@@ -97,6 +95,12 @@ typedef struct node {
     s_align* alignment;
 } node;
 
+typedef struct {
+    node* node;
+    alignment_end end;
+} node_alignment_end;
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -126,9 +130,8 @@ s_profile* ssw_init (const int8_t* read, const int32_t readLen, const int8_t* ma
 */
 void init_destroy (s_profile* p);
 
-void align_init (s_align* a);
+s_align* align_create(void);
 
-void s_align_destroy (s_align* a);
 
 // @function	ssw alignment.
 /*!	@function	Do Striped Smith-Waterman alignment.
@@ -208,15 +211,11 @@ s_align* ssw_align (const s_profile* prof,
 */
 s_align* ssw_fill (const s_profile* prof,
                    const int8_t* ref,
-                   int32_t refLen,
+                   const int32_t refLen,
                    const uint8_t weight_gapO,
                    const uint8_t weight_gapE,
-                   const uint8_t flag,
-                   const uint16_t filters,
-                   const int32_t filterd,
                    const int32_t maskLen,
-                   const uint8_t use_seed,
-                   const s_align* seed);
+                   s_seed* seed);
 
 
 /*!	@function	Release the memory allocated by function ssw_align.
@@ -227,7 +226,7 @@ void align_destroy (s_align* a);
 /*!	@function	Release the memory allocated for mH and pvE in s_align.
 	@param	a	pointer to the alignment result structure
 */
-void align_clear_matrix_and_pvE (s_align* a);
+void align_clear_matrix_and_seed (s_align* a);
 
 /*! @function       Print score matrix, determines stride from result score
     @param refLen   Reference length.
@@ -293,14 +292,28 @@ void reverse_cigar(cigar* c);
 void print_cigar(cigar* c);
 void cigar_destroy(cigar* c);
 
-node* node_create(char* id, char* seq, int8_t* nt_table, int8_t* score_matrix);
+node* node_create(const char* id,
+                  const char* seq,
+                  const int8_t* nt_table,
+                  const int8_t* score_matrix);
 void node_destroy(node* n);
 void node_add_prev(node* n);
 void node_add_next(node* n);
 
+alignment_end*
+node_fill (const s_profile* prof,
+           node* node,
+           const uint8_t weight_gapO,
+           const uint8_t weight_gapE,
+           const int32_t maskLen,
+           const s_seed* seed);
+
+// some utility functions
 int8_t* create_score_matrix(int32_t match, int32_t mismatch);
 int8_t* create_nt_table(void);
-int8_t* create_num(char* seq, int32_t len, int8_t* nt_table);
+int8_t* create_num(const char* seq,
+                   const int32_t len,
+                   const int8_t* nt_table);
 
 #ifdef __cplusplus
 }

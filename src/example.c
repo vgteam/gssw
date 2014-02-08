@@ -55,13 +55,13 @@ int main (int argc, char * const argv[]) {
 	//result = ssw_align (profile, ref_num, strlen(ref_seq), gap_open, gap_extension, 1, 0, 0, 15);
 	//ssw_write(result, ref_seq, read_seq, nt_table);
 
-	s_align* result1 = ssw_fill (profile, ref_num_1, strlen(ref_seq_1), gap_open, gap_extension, 1, 0, 0, 15, 0, NULL);
+	s_align* result1 = ssw_fill (profile, ref_num_1, strlen(ref_seq_1), gap_open, gap_extension, 15, NULL);
     print_score_matrix(ref_seq_1, strlen(ref_seq_1), read_seq, strlen(read_seq), result1);
     cigar* path = trace_back (result1, result1->ref_end1, result1->read_end1, ref_seq_1, strlen(ref_seq_1), read_seq, strlen(read_seq), match, mismatch, gap_open, gap_extension);
     print_cigar(path); printf("\n");
     cigar_destroy(path);
 
-	s_align* result2 = ssw_fill (profile, ref_num_2, strlen(ref_seq_2), gap_open, gap_extension, 1, 0, 0, 15, 1, result1);
+	s_align* result2 = ssw_fill (profile, ref_num_2, strlen(ref_seq_2), gap_open, gap_extension, 15, &result1->seed);
     print_score_matrix(ref_seq_2, strlen(ref_seq_2), read_seq, strlen(read_seq), result2);
     path = trace_back (result2, result2->ref_end1, result2->read_end1, ref_seq_2, strlen(ref_seq_2), read_seq, strlen(read_seq), match, mismatch, gap_open, gap_extension);
     print_cigar(path); printf("\n");
