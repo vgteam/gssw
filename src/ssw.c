@@ -95,6 +95,21 @@ __m128i* qP_byte (const int8_t* read_num,
 	return vProfile;
 }
 
+/* To determine the maximum values within each vector, rather than between vectors. */
+
+#define m128i_max16(m, vm) \
+    (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 8)); \
+    (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 4)); \
+    (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 2)); \
+    (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 1)); \
+    (m) = _mm_extract_epi16((vm), 0)
+
+#define m128i_max8(m, vm) \
+    (vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 8)); \
+    (vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 4)); \
+    (vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 2)); \
+    (m) = _mm_extract_epi16((vm), 0)
+
 /* Striped Smith-Waterman
    Record the highest score of each reference position.
    Return the alignment score and ending position of the best alignment, 2nd best alignment, etc.
@@ -116,13 +131,7 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
                              uint8_t bias,  /* Shift 0 point to a positive value. */
                              int32_t maskLen,
                              s_align* alignment, /* to save seed and matrix */
-                             s_seed* seed) {     /* to seed the alignment */
-
-#define max16(m, vm) (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 8)); \
-					  (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 4)); \
-					  (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 2)); \
-					  (vm) = _mm_max_epu8((vm), _mm_srli_si128((vm), 1)); \
-					  (m) = _mm_extract_epi16((vm), 0)
+                             const s_seed* seed) {     /* to seed the alignment */
 
 	uint8_t max = 0;		                     /* the max alignment score */
 	int32_t end_read = readLen - 1;
@@ -164,6 +173,9 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 
     /* Set external H matrix pointer */
     alignment->mH = mH;
+
+    /* Record that we have done a byte-order alignment */
+    alignment->is_byte = 1;
 
 	/* Define 16 byte 0 vector. */
 	__m128i vZero = _mm_set1_epi32(0);
@@ -300,7 +312,7 @@ alignment_end* sw_sse2_byte (const int8_t* ref,
 		if (cmp != 0xffff) {
 			uint8_t temp;
 			vMaxMark = vMaxScore;
-			max16(temp, vMaxScore);
+			m128i_max16(temp, vMaxScore);
 			vMaxScore = vMaxMark;
 
 			if (LIKELY(temp > max)) {
@@ -403,13 +415,8 @@ alignment_end* sw_sse2_word (const int8_t* ref,
 							 uint16_t terminate,
 							 int32_t maskLen,
                              s_align* alignment, /* to save seed and matrix */
-                             s_seed* seed) {     /* to seed the alignment */
-
-
-#define max8(m, vm) (vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 8)); \
-					(vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 4)); \
-					(vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 2)); \
-					(m) = _mm_extract_epi16((vm), 0)
+                             const s_seed* seed) {     /* to seed the alignment */
+    
 
 	uint16_t max = 0;		                     /* the max alignment score */
 	int32_t end_read = readLen - 1;
@@ -452,6 +459,9 @@ alignment_end* sw_sse2_word (const int8_t* ref,
 
     /* Set external H matrix pointer */
     alignment->mH = mH;
+
+    /* Record that we have done a word-order alignment */
+    alignment->is_byte = 0;
 
 	/* Define 16 byte 0 vector. */
 	__m128i vZero = _mm_set1_epi32(0);
@@ -541,7 +551,7 @@ end:
 		if (cmp != 0xffff) {
 			uint16_t temp;
 			vMaxMark = vMaxScore;
-			max8(temp, vMaxScore);
+			m128i_max8(temp, vMaxScore);
 			vMaxScore = vMaxMark;
 
 			if (LIKELY(temp > max)) {
@@ -754,11 +764,11 @@ void print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen,
 
 }
 
-int is_byte (s_align* alignment) {
-    if (alignment->score1 >= 255) {
-        return 0;
-    } else {
+inline int is_byte (s_align* alignment) {
+    if (alignment->is_byte) {
         return 1;
+    } else {
+        return 0;
     }
 }
 
@@ -922,6 +932,8 @@ void add_element(cigar* c, char type, uint32_t length) {
         c->elements[c->length - 1].length = length;
     } else if (type != c->elements[c->length - 1].type) {
         c->length++;
+        // change to not realloc every single freakin time
+        // but e.g. on doubling
         c->elements = (cigar_element*) realloc(c->elements, c->length * sizeof(cigar_element));
         c->elements[c->length - 1].type = type;
         c->elements[c->length - 1].length = length;
@@ -964,6 +976,11 @@ void cigar_destroy(cigar* c) {
     free(c);
 }
 
+void seed_destroy(s_seed* s) {
+    free(s->pvE);
+    free(s->pvHStore);
+}
+
 node* node_create(const char* id,
                   const char* seq,
                   const int8_t* nt_table,
@@ -998,6 +1015,10 @@ void node_destroy(node* n) {
     free(n);
 }
 
+//void node_clear_alignment(node* n) {
+//    align_clear_matrix_and_seed(n->alignment);
+//}
+
 void node_add_prev(node* n) {
     ++n->count_prev;
     n->prev = (node**)realloc(n->prev, n->count_prev*sizeof(node*));
@@ -1010,33 +1031,197 @@ void node_add_next(node* n) {
     n->next[n->count_next -1] = n;
 }
 
-alignment_end*
-node_fill (const s_profile* prof,
-           node* node,
+s_seed* create_seed_byte(int32_t readLen, node** prev, int32_t count) {
+    int32_t j = 0, k = 0;
+    __m128i vZero = _mm_set1_epi32(0);
+	int32_t segLen = (readLen + 15) / 16;
+    s_seed* seed = (s_seed*)calloc(1, sizeof(s_seed));
+    if (!(!posix_memalign((void**)&seed->pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&seed->pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
+        fprintf(stderr, "Could not allocate memory for alignment seed\n"); exit(1);
+    }
+    memset(seed->pvE,      0, segLen*sizeof(__m128i));
+    memset(seed->pvHStore, 0, segLen*sizeof(__m128i));
+    // take the max of all inputs
+    __m128i pvE = vZero, pvH = vZero, ovE = vZero, ovH = vZero;
+    for (j = 0; j < segLen; ++j) {
+        pvE = vZero; pvH = vZero;
+        for (k = 0; k < count; ++k) {
+            ovE = _mm_load_si128(prev[k]->alignment->seed.pvE + j);
+            ovH = _mm_load_si128(prev[k]->alignment->seed.pvHStore + j);
+            pvE = _mm_max_epu8(pvE, ovE);
+            pvH = _mm_max_epu8(pvH, ovH);
+        }
+        _mm_store_si128(seed->pvHStore + j, pvH);
+        _mm_store_si128(seed->pvHStore + j, pvE);
+    }
+    return seed;
+}
+
+s_seed* create_seed_word(int32_t readLen, node** prev, int32_t count) {
+    int32_t j = 0, k = 0;
+    __m128i vZero = _mm_set1_epi32(0);
+	int32_t segLen = (readLen + 7) / 8;
+    s_seed* seed = (s_seed*)calloc(1, sizeof(s_seed));
+    if (!(!posix_memalign((void**)&seed->pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
+          !posix_memalign((void**)&seed->pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
+        fprintf(stderr, "Could not allocate memory for alignment seed\n"); exit(1);
+    }
+    memset(seed->pvE,      0, segLen*sizeof(__m128i));
+    memset(seed->pvHStore, 0, segLen*sizeof(__m128i));
+    // take the max of all inputs
+    __m128i pvE = vZero, pvH = vZero, ovE = vZero, ovH = vZero;
+    for (j = 0; j < segLen; ++j) {
+        pvE = vZero; pvH = vZero;
+        for (k = 0; k < count; ++k) {
+            ovE = _mm_load_si128(prev[k]->alignment->seed.pvE + j);
+            ovH = _mm_load_si128(prev[k]->alignment->seed.pvHStore + j);
+            pvE = _mm_max_epu8(pvE, ovE);
+            pvH = _mm_max_epu8(pvH, ovH);
+        }
+        _mm_store_si128(seed->pvHStore + j, pvH);
+        _mm_store_si128(seed->pvHStore + j, pvE);
+    }
+    return seed;
+}
+
+
+
+graph*
+graph_fill (graph* graph,
+            const char* read_seq,
+            const int8_t* nt_table,
+            const int8_t* score_matrix,
+            const uint8_t weight_gapO,
+            const uint8_t weight_gapE,
+            const int32_t maskLen) {
+
+    int32_t read_length = strlen(read_seq);
+    int8_t* read_num = create_num(read_seq, read_length, nt_table);
+	s_profile* prof = ssw_init(read_num, read_length, score_matrix, 5, 2);
+    s_seed* seed = NULL;
+
+    // for each node, from start to finish in the partial order (which should be sorted topologically)
+    // generate a seed from input nodes or use existing (e.g. for subgraph traversal here)
+    uint32_t i;
+    node* n = graph->nodes[0];
+    for (i = 0; i < graph->size; ++i, ++n) {
+        // get seed from parents (max of multiple inputs)
+        if (prof->profile_byte) {
+            seed = create_seed_byte(prof->readLen, n->prev, n->count_prev);
+        } else {
+            seed = create_seed_word(prof->readLen, n->prev, n->count_prev);
+        }
+        node_fill(n, prof, weight_gapO, weight_gapE, maskLen, seed);
+        seed_destroy(seed); seed = NULL; // cleanup seed
+        if (n->alignment->score1 > 255) {
+            // re-run with width 8 (16-bit precision scores)
+            free(prof->profile_byte);
+            prof->profile_byte = NULL;
+            n = graph->nodes[0];
+            i = 0; // reset iteration
+        }
+    }
+
+    free(read_num);
+    free(prof);
+
+    return graph;
+
+}
+
+// TODO graph traceback
+
+
+node*
+node_fill (node* node,
+           const s_profile* prof,
            const uint8_t weight_gapO,
            const uint8_t weight_gapE,
            const int32_t maskLen,
            const s_seed* seed) {
 
-    alignment_end* best = (alignment_end*)calloc(1, sizeof(alignment_end));
+	alignment_end* bests = NULL;
+	int32_t readLen = prof->readLen;
 
+    //alignment_end* best = (alignment_end*)calloc(1, sizeof(alignment_end));
+    s_align* alignment = node->alignment;
+
+    if (node->alignment) {
+        // clear old alignment
+        align_clear_matrix_and_seed(alignment);
+    }
+    // and build up a new one
+    alignment = align_create();
+
+    
     // if we have parents, we should generate a new seed as the max of each vector
     // if one of the parents has moved into uint16_t space, we need to account for this
     // otherwise, just use the single parent alignment result as seed
     // or, if no parents, run unseeded
 
-    //__m128i vHMax;
+    // to decrease code complexity, we assume the same stripe size for the entire graph
+    // this is ensured by changing the stripe size for the entire graph in graph_fill if any node scores >= 255
 
-    // align against this node
-	//node->alignment = ssw_fill (prof, node->seq, node->len, gap_open, gap_extension, 15, use_seed, seed);
-    //print_score_matrix(node->seq, node->len, read_seq, strlen(read_seq), result1);
+	// Find the alignment scores and ending positions
+	if (prof->profile_byte) {
 
+		bests = sw_sse2_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
 
-    // then go to the next, seed each alignment with ours
-    // return the node with the highest score
+		if (prof->profile_word && bests[0].score == 255) {
+			free(bests);
+            align_clear_matrix_and_seed(alignment);
+            bests = sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen, alignment, seed);
+        } else if (bests[0].score == 255) {
+			fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
+			return 0;
+		}
+	} else if (prof->profile_word) {
+        bests = sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen, alignment, seed);
+    } else {
+		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
+		return 0;
+	}
 
-    return best;
+	alignment->score1 = bests[0].score;
+	alignment->ref_end1 = bests[0].ref;
+	alignment->read_end1 = bests[0].read;
+	if (maskLen >= 15) {
+		alignment->score2 = bests[1].score;
+		alignment->ref_end2 = bests[1].ref;
+	} else {
+	    alignment->score2 = 0;
+		alignment->ref_end2 = -1;
+	}
+	free(bests);
 
+	return node;
+
+}
+
+graph* graph_create(uint32_t size) {
+    graph* g = calloc(1, sizeof(graph));
+    g->nodes = malloc(size*sizeof(node*));
+    if (!g || !g->nodes) { fprintf(stderr, "Could not allocate memory for graph of %u nodes.\n", size); exit(1); }
+    return g;
+}
+
+void graph_destroy(graph* g) {
+    free(g->nodes);
+    free(g);
+}
+
+int32_t graph_add_node(graph* graph, node* node) {
+    const int32_t graph_realloc_size = 1024;
+    if (graph->size % graph_realloc_size == 0) {
+        graph->size += graph_realloc_size;
+        if (UNLIKELY(!realloc((void*)graph->nodes, graph->size * sizeof(void*)))) {
+            fprintf(stderr, "could not allocate memory for graph\n"); exit(1);
+        }
+    }
+    graph->nodes[graph->size] = node;
+    ++graph->size;
+    return graph->size;
 }
 
 int8_t* create_num(const char* seq,

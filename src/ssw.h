@@ -51,6 +51,7 @@ typedef struct {
 	int32_t read_end1;
 	int32_t ref_end2;
     s_seed seed;
+    uint8_t is_byte;
     void* mH;
 } s_align;
 
@@ -97,8 +98,28 @@ typedef struct node {
 
 typedef struct {
     node* node;
+    cigar cigar;
+    int32_t ref_begin;
+	int32_t ref_end;
+	int32_t	read_begin;
+	int32_t read_end;
+} node_mapping;
+
+typedef struct {
+    int32_t length;
+    node_mapping* nodes;
+} path;
+
+typedef struct {
+    node* node;
     alignment_end end;
 } node_alignment_end;
+
+typedef struct {
+    uint32_t size;
+    node** nodes;
+} graph;
+
 
 
 #ifdef __cplusplus
@@ -287,6 +308,10 @@ int is_byte (s_align* alignment);
 */
 //cigar* traceback (s_align* alignment, int32_t readPos, int32_t refPos);
 
+void seed_destroy(s_seed* seed);
+s_seed* create_seed_byte(int32_t readLen, node** prev, int32_t count);
+s_seed* create_seed_word(int32_t readLen, node** prev, int32_t count);
+
 void add_element(cigar* c, char type, uint32_t length);
 void reverse_cigar(cigar* c);
 void print_cigar(cigar* c);
@@ -297,16 +322,21 @@ node* node_create(const char* id,
                   const int8_t* nt_table,
                   const int8_t* score_matrix);
 void node_destroy(node* n);
+//void node_clear_alignment(node* n);
 void node_add_prev(node* n);
 void node_add_next(node* n);
 
-alignment_end*
-node_fill (const s_profile* prof,
-           node* node,
+node*
+node_fill (node* node,
+           const s_profile* prof,
            const uint8_t weight_gapO,
            const uint8_t weight_gapE,
            const int32_t maskLen,
            const s_seed* seed);
+
+graph* graph_create(uint32_t size);
+int32_t graph_add_node(graph* graph, node* node);
+void graph_destroy(graph* graph);
 
 // some utility functions
 int8_t* create_score_matrix(int32_t match, int32_t mismatch);
