@@ -308,6 +308,7 @@ int is_byte (s_align* alignment);
 */
 //cigar* traceback (s_align* alignment, int32_t readPos, int32_t refPos);
 
+void profile_destroy(s_profile* prof);
 void seed_destroy(s_seed* seed);
 s_seed* create_seed_byte(int32_t readLen, node** prev, int32_t count);
 s_seed* create_seed_word(int32_t readLen, node** prev, int32_t count);
@@ -323,8 +324,9 @@ node* node_create(const char* id,
                   const int8_t* score_matrix);
 void node_destroy(node* n);
 //void node_clear_alignment(node* n);
-void node_add_prev(node* n);
-void node_add_next(node* n);
+void node_add_prev(node* n, node* m);
+void node_add_next(node* n, node* m);
+void nodes_add_edge(node* n, node* m);
 
 node*
 node_fill (node* node,
@@ -334,9 +336,19 @@ node_fill (node* node,
            const int32_t maskLen,
            const s_seed* seed);
 
+graph*
+graph_fill (graph* graph,
+            const char* read_seq,
+            const int8_t* nt_table,
+            const int8_t* score_matrix,
+            const uint8_t weight_gapO,
+            const uint8_t weight_gapE,
+            const int32_t maskLen);
+
 graph* graph_create(uint32_t size);
 int32_t graph_add_node(graph* graph, node* node);
 void graph_destroy(graph* graph);
+void graph_print_score_matrices(graph* graph, char* read, int32_t readLen);
 
 // some utility functions
 int8_t* create_score_matrix(int32_t match, int32_t mismatch);

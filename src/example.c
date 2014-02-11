@@ -31,8 +31,6 @@ int main (int argc, char * const argv[]) {
     char *ref_seq_2 = argv[2];
     char *read_seq = argv[3];
 
-	s_profile* profile;
-
 	/* This table is used to transform nucleotide letters into numbers. */
     int8_t* nt_table = create_nt_table();
     
@@ -45,10 +43,27 @@ int main (int argc, char * const argv[]) {
 	//	0  0  0  0  0	N (or other ambiguous code)
 	int8_t* mat = create_score_matrix(match, mismatch);
 
-	int8_t* num = create_num(read_seq, strlen(read_seq), nt_table);
-	int8_t* ref_num_1 = create_num(ref_seq_1, strlen(ref_seq_1), nt_table);
-	int8_t* ref_num_2 = create_num(ref_seq_2, strlen(ref_seq_2), nt_table);
+    node* nodes[2];
+    nodes[0] = (node*)node_create("A", ref_seq_1, nt_table, mat);
+    nodes[1] = (node*)node_create("B", ref_seq_2, nt_table, mat);
 
+    nodes_add_edge(nodes[0], nodes[1]);
+
+    graph* graph = graph_create(2);
+    memcpy((void*)graph->nodes, (void*)nodes, 2*sizeof(node*));
+    graph->size = 2;
+    //graph_add_node(graph, nodes[0]);
+    //graph_add_node(graph, nodes[1]);
+
+    graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 15);
+    graph_print_score_matrices(graph, read_seq, strlen(read_seq));
+
+    graph_destroy(graph);
+    node_destroy(nodes[0]);
+    node_destroy(nodes[1]);
+
+    /*
+	s_profile* profile;
 	profile = ssw_init(num, strlen(read_seq), mat, 5, 2);
 
 	// Only the 8 bit of the flag is setted. ssw_align will always return the best alignment beginning position and cigar.
@@ -70,11 +85,10 @@ int main (int argc, char * const argv[]) {
     align_destroy(result1);
     align_destroy(result2);
     init_destroy(profile);
+    */
 
     free(nt_table);
 	free(mat);
-	free(ref_num_1);
-	free(ref_num_2);
-	free(num);
+
 	return(0);
 }

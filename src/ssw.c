@@ -764,6 +764,16 @@ void print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen,
 
 }
 
+void graph_print_score_matrices(graph* graph, char* read, int32_t readLen) {
+    uint32_t i = 0, gs = graph->size;
+    node** npp = graph->nodes;
+    for (i=0; i<gs; ++i, ++npp) {
+        node* n = *npp;
+        fprintf(stdout, "node %s\n", n->id);
+        print_score_matrix(n->seq, n->len, read, readLen, n->alignment);
+    }
+}
+
 inline int is_byte (s_align* alignment) {
     if (alignment->is_byte) {
         return 1;
@@ -978,7 +988,10 @@ void cigar_destroy(cigar* c) {
 
 void seed_destroy(s_seed* s) {
     free(s->pvE);
+    s->pvE = NULL;
     free(s->pvHStore);
+    s->pvE = NULL;
+    free(s);
 }
 
 node* node_create(const char* id,
@@ -996,6 +1009,7 @@ node* node_create(const char* id,
     n->num = create_num(seq, len, nt_table);
     n->count_prev = 0; // are these be set == 0 by calloc?
     n->count_next = 0;
+    n->alignment = NULL;
     return n;
 }
 
@@ -1005,13 +1019,19 @@ void node_clear_alignment(node* n) {
     n->alignment = NULL;
 }
 
+void profile_destroy(s_profile* prof) {
+    free(prof->profile_byte);
+    free(prof->profile_word);
+    free(prof);
+}
+
 void node_destroy(node* n) {
     free(n->id);
     free(n->seq);
     free(n->num);
     free(n->prev);
     free(n->next);
-    free(n->alignment);
+    align_destroy(n->alignment);
     free(n);
 }
 
@@ -1019,16 +1039,21 @@ void node_destroy(node* n) {
 //    align_clear_matrix_and_seed(n->alignment);
 //}
 
-void node_add_prev(node* n) {
+void node_add_prev(node* n, node* m) {
     ++n->count_prev;
     n->prev = (node**)realloc(n->prev, n->count_prev*sizeof(node*));
-    n->prev[n->count_prev -1] = n;
+    n->prev[n->count_prev -1] = m;
 }
 
-void node_add_next(node* n) {
+void node_add_next(node* n, node* m) {
     ++n->count_next;
     n->next = (node**)realloc(n->next, n->count_next*sizeof(node*));
-    n->next[n->count_next -1] = n;
+    n->next[n->count_next -1] = m;
+}
+
+void nodes_add_edge(node* n, node* m) {
+    node_add_next(n, m);
+    node_add_prev(m, n);
 }
 
 s_seed* create_seed_byte(int32_t readLen, node** prev, int32_t count) {
@@ -1042,18 +1067,20 @@ s_seed* create_seed_byte(int32_t readLen, node** prev, int32_t count) {
     }
     memset(seed->pvE,      0, segLen*sizeof(__m128i));
     memset(seed->pvHStore, 0, segLen*sizeof(__m128i));
+    fprintf(stderr, "i make here %i nodes\n", count);
     // take the max of all inputs
     __m128i pvE = vZero, pvH = vZero, ovE = vZero, ovH = vZero;
     for (j = 0; j < segLen; ++j) {
         pvE = vZero; pvH = vZero;
         for (k = 0; k < count; ++k) {
+            fprintf(stderr, "i make yes %i\n", k);
             ovE = _mm_load_si128(prev[k]->alignment->seed.pvE + j);
             ovH = _mm_load_si128(prev[k]->alignment->seed.pvHStore + j);
             pvE = _mm_max_epu8(pvE, ovE);
             pvH = _mm_max_epu8(pvH, ovH);
         }
         _mm_store_si128(seed->pvHStore + j, pvH);
-        _mm_store_si128(seed->pvHStore + j, pvE);
+        _mm_store_si128(seed->pvE + j, pvE);
     }
     return seed;
 }
@@ -1080,11 +1107,10 @@ s_seed* create_seed_word(int32_t readLen, node** prev, int32_t count) {
             pvH = _mm_max_epu8(pvH, ovH);
         }
         _mm_store_si128(seed->pvHStore + j, pvH);
-        _mm_store_si128(seed->pvHStore + j, pvE);
+        _mm_store_si128(seed->pvE + j, pvE);
     }
     return seed;
 }
-
 
 
 graph*
@@ -1104,8 +1130,9 @@ graph_fill (graph* graph,
     // for each node, from start to finish in the partial order (which should be sorted topologically)
     // generate a seed from input nodes or use existing (e.g. for subgraph traversal here)
     uint32_t i;
-    node* n = graph->nodes[0];
-    for (i = 0; i < graph->size; ++i, ++n) {
+    node** npp = &graph->nodes[0];
+    for (i = 0; i < graph->size; ++i, ++npp) {
+        node* n = *npp;
         // get seed from parents (max of multiple inputs)
         if (prof->profile_byte) {
             seed = create_seed_byte(prof->readLen, n->prev, n->count_prev);
@@ -1118,13 +1145,13 @@ graph_fill (graph* graph,
             // re-run with width 8 (16-bit precision scores)
             free(prof->profile_byte);
             prof->profile_byte = NULL;
-            n = graph->nodes[0];
+            npp = &graph->nodes[0];
             i = 0; // reset iteration
         }
     }
 
     free(read_num);
-    free(prof);
+    profile_destroy(prof);
 
     return graph;
 
@@ -1147,12 +1174,12 @@ node_fill (node* node,
     //alignment_end* best = (alignment_end*)calloc(1, sizeof(alignment_end));
     s_align* alignment = node->alignment;
 
-    if (node->alignment) {
+    if (alignment) {
         // clear old alignment
-        align_clear_matrix_and_seed(alignment);
+        align_destroy(alignment);
     }
     // and build up a new one
-    alignment = align_create();
+    node->alignment = alignment = align_create();
 
     
     // if we have parents, we should generate a new seed as the max of each vector
@@ -1207,6 +1234,7 @@ graph* graph_create(uint32_t size) {
 }
 
 void graph_destroy(graph* g) {
+    
     free(g->nodes);
     free(g);
 }
