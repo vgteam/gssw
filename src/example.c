@@ -55,7 +55,7 @@ int main (int argc, char * const argv[]) {
     //graph_add_node(graph, nodes[0]);
     //graph_add_node(graph, nodes[1]);
 
-    graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 15);
+    graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 15, 2);
     graph_print_score_matrices(graph, read_seq, strlen(read_seq));
     graph_cigar* gc = graph_trace_back (graph,
                                         read_seq,

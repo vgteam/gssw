@@ -368,7 +368,8 @@ graph_fill (graph* graph,
             const int8_t* score_matrix,
             const uint8_t weight_gapO,
             const uint8_t weight_gapE,
-            const int32_t maskLen);
+            const int32_t maskLen,
+            const int8_t score_size);
 
 graph* graph_create(uint32_t size);
 int32_t graph_add_node(graph* graph, node* node);

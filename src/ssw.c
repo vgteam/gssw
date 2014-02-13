@@ -566,7 +566,7 @@ end:
             uint16_t* t;
             int32_t ti;
             vH = pvHStore[j];
-            for (t = (uint16_t*)&vH, ti = 0; ti < 16; ++ti) {
+            for (t = (uint16_t*)&vH, ti = 0; ti < 8; ++ti) {
                 //fprintf(stdout, "%d\t", *t++);
                 ((uint16_t*)mH)[i*readLen + ti*segLen + j] = *t++;
             }
@@ -1037,7 +1037,7 @@ graph_cigar* graph_trace_back (graph* graph,
     while (score > 0) {
         if (gc->length > 0 && gc->length == GRAPH_CIGAR_ALLOC_SIZE) {
             gc->elements = realloc((void*)gc->elements,
-                                gc->length + GRAPH_CIGAR_ALLOC_SIZE*sizeof(node_cigar));
+                                   gc->length + GRAPH_CIGAR_ALLOC_SIZE*sizeof(node_cigar));
         }
         nc->cigar = alignment_trace_back (n->alignment,
                                           &score,
@@ -1323,11 +1323,12 @@ graph_fill (graph* graph,
             const int8_t* score_matrix,
             const uint8_t weight_gapO,
             const uint8_t weight_gapE,
-            const int32_t maskLen) {
+            const int32_t maskLen,
+            const int8_t score_size) {
 
     int32_t read_length = strlen(read_seq);
     int8_t* read_num = create_num(read_seq, read_length, nt_table);
-	s_profile* prof = ssw_init(read_num, read_length, score_matrix, 5, 2);
+	s_profile* prof = ssw_init(read_num, read_length, score_matrix, 5, score_size);
     s_seed* seed = NULL;
     uint16_t max_score = 0;
 
@@ -1343,16 +1344,19 @@ graph_fill (graph* graph,
         } else {
             seed = create_seed_word(prof->readLen, n->prev, n->count_prev);
         }
-        node_fill(n, prof, weight_gapO, weight_gapE, maskLen, seed);
+        node* filled_node = node_fill(n, prof, weight_gapO, weight_gapE, maskLen, seed);
         seed_destroy(seed); seed = NULL; // cleanup seed
         // test if we have exceeded the score dynamic range
-        if (prof->profile_byte && n->alignment->score1 > 255) {
-            // re-run with width 8 (16-bit precision scores)
+        if (prof->profile_byte && !filled_node) {
             free(prof->profile_byte);
             prof->profile_byte = NULL;
-            npp = &graph->nodes[0];
-            i = 0; // reset iteration
-            max_score = 0;
+            // free previous nodes which have 8-bit stripes
+            //npp = &graph->nodes[0];
+            //i = 1; // reset iteration
+            //max_score = 0;
+            free(read_num);
+            profile_destroy(prof);
+            return graph_fill(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE, maskLen, 1);
         } else {
             if (!graph->max_node || n->alignment->score1 > max_score) {
                 graph->max_node = n;
@@ -1403,19 +1407,14 @@ node_fill (node* node,
 
 	// Find the alignment scores and ending positions
 	if (prof->profile_byte) {
-
 		bests = sw_sse2_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
-
-		if (prof->profile_word && bests[0].score == 255) {
+		if (bests[0].score == 255) {
 			free(bests);
             align_clear_matrix_and_seed(alignment);
-            bests = sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen, alignment, seed);
-        } else if (bests[0].score == 255) {
-			fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
-			return 0;
+            return 0; // re-run from external context
 		}
 	} else if (prof->profile_word) {
-        bests = sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen, alignment, seed);
+        bests = sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen, alignment, seed);
     } else {
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
 		return 0;
