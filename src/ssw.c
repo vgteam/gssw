@@ -970,6 +970,10 @@ graph_cigar* graph_cigar_create(void) {
 }
 
 void graph_cigar_destroy(graph_cigar* g) {
+    int32_t i;
+    for (i = 0; i < g->length; ++i) {
+        cigar_destroy(g->elements[i].cigar);
+    }
     free(g->elements);
     free(g);
 }
