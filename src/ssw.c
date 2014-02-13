@@ -769,7 +769,7 @@ void graph_print_score_matrices(graph* graph, char* read, int32_t readLen) {
     node** npp = graph->nodes;
     for (i=0; i<gs; ++i, ++npp) {
         node* n = *npp;
-        fprintf(stdout, "node %s\n", n->id);
+        fprintf(stdout, "node %u\n", n->id);
         print_score_matrix(n->seq, n->len, read, readLen, n->alignment);
     }
 }
@@ -782,74 +782,87 @@ inline int is_byte (s_align* alignment) {
     }
 }
 
-cigar* trace_back (s_align* alignment,
-                   int32_t refEnd,
-                   int32_t readEnd,
-                   char* ref,
-                   int32_t refLen,
-                   char* read,
-                   int32_t readLen,
-                   int32_t match,
-                   int32_t mismatch,
-                   int32_t gap_open,
-                   int32_t gap_extension) {
-    if (is_byte(alignment)) {
-        return trace_back_byte(alignment,
-                               refEnd,
-                               readEnd,
-                               ref,
-                               refLen,
-                               read,
-                               readLen,
-                               match,
-                               mismatch,
-                               gap_open,
-                               gap_extension);
+cigar* alignment_trace_back (s_align* alignment,
+                             uint16_t* score,
+                             int32_t* refEnd,
+                             int32_t* readEnd,
+                             char* ref,
+                             int32_t refLen,
+                             char* read,
+                             int32_t readLen,
+                             int32_t match,
+                             int32_t mismatch,
+                             int32_t gap_open,
+                             int32_t gap_extension) {
+    if (LIKELY(is_byte(alignment))) {
+        return alignment_trace_back_byte(alignment,
+                                         score,
+                                         refEnd,
+                                         readEnd,
+                                         ref,
+                                         refLen,
+                                         read,
+                                         readLen,
+                                         match,
+                                         mismatch,
+                                         gap_open,
+                                         gap_extension);
     } else {
-        return trace_back_byte(alignment,
-                               refEnd,
-                               readEnd,
-                               ref,
-                               refLen,
-                               read,
-                               readLen,
-                               match,
-                               mismatch,
-                               gap_open,
-                               gap_extension);
+        return alignment_trace_back_byte(alignment,
+                                         score,
+                                         refEnd,
+                                         readEnd,
+                                         ref,
+                                         refLen,
+                                         read,
+                                         readLen,
+                                         match,
+                                         mismatch,
+                                         gap_open,
+                                         gap_extension);
     }
 }
 
-cigar* trace_back_byte (s_align* alignment,
-                        int32_t refEnd,
-                        int32_t readEnd,
-                        char* ref,
-                        int32_t refLen,
-                        char* read,
-                        int32_t readLen,
-                        int32_t match,
-                        int32_t mismatch,
-                        int32_t gap_open,
-                        int32_t gap_extension) {
+cigar* alignment_trace_back_byte (s_align* alignment,
+                                  uint16_t* score,
+                                  int32_t* refEnd,
+                                  int32_t* readEnd,
+                                  char* ref,
+                                  int32_t refLen,
+                                  char* read,
+                                  int32_t readLen,
+                                  int32_t match,
+                                  int32_t mismatch,
+                                  int32_t gap_open,
+                                  int32_t gap_extension) {
 
     uint8_t* mH = (uint8_t*)alignment->mH;
-    int32_t i = refEnd;
-    int32_t j = readEnd;
+    int32_t i = *refEnd;
+    int32_t j = *readEnd;
     // find maximum
     uint8_t h = mH[readLen*i + j];
 	cigar* result = (cigar*)calloc(1, sizeof(cigar));
     result->length = 0;
 
-    while (LIKELY(h != 0 && i > 0 && j > 0)) {
+    while (LIKELY(h != 0 && i >= 0 && j >= 0)) {
         //printf("h=%i i=%i j=%i\n", h, i, j);
         // look at neighbors
-        int32_t d = mH[readLen*(i-1) + (j-1)];
-        int32_t l = mH[readLen*(i-1) + j];
-        int32_t u = mH[readLen*i + (j-1)];
+        int32_t d = 0, l = 0, u = 0;
+        if (i > 0 && j > 0) {
+            d = mH[readLen*(i-1) + (j-1)];
+        }
+        if (i > 0) {
+            l = mH[readLen*(i-1) + j];
+        }
+        if (j > 0) {
+            u = mH[readLen*i + (j-1)];
+        }
         // get the max of the three directions
         int32_t n = (l > u ? l : u);
         n = (h > n ? h : n);
-        if (h == n && ((d + match == h && ref[i] == read[j]) || (d - mismatch == h && ref[i] != read[j]))) {
+        if (h == n &&
+            ((d + match == h && ref[i] == read[j])
+             || (d - mismatch == h && ref[i] != read[j]))) {
             add_element(result, 'M', 1);
             h = d;
             --i; --j;
@@ -862,16 +875,20 @@ cigar* trace_back_byte (s_align* alignment,
             h = u;
             --j;
         } else {
+            // this is not an error if we are tracing back across a graph
+            break;
             fprintf(stderr, "traceback error\n");
             fprintf(stderr, "h=%i i=%i j=%i\n", h, i, j);
             fprintf(stderr, "d=%i, u=%i, l=%i\n", d, u, l);
             h = d; --i; --j;
         }
     }
-    if (h == match) { // we hit the edge but score was not 0
-        add_element(result, 'M', 1);
-    }
+
+    *score = h;
+
     reverse_cigar(result);
+    *refEnd = i;
+    *readEnd = j;
     return result;
 }
 
@@ -879,36 +896,46 @@ cigar* trace_back_byte (s_align* alignment,
 // copy of the above but for 16 bit ints
 // sometimes there are good reasons for C++'s templates... sigh
 
-cigar* trace_back_word (s_align* alignment,
-                        int32_t refEnd,
-                        int32_t readEnd,
-                        char* ref,
-                        int32_t refLen,
-                        char* read,
-                        int32_t readLen,
-                        int32_t match,
-                        int32_t mismatch,
-                        int32_t gap_open,
-                        int32_t gap_extension) {
+cigar* alignment_trace_back_word (s_align* alignment,
+                                  uint16_t* score,
+                                  int32_t* refEnd,
+                                  int32_t* readEnd,
+                                  char* ref,
+                                  int32_t refLen,
+                                  char* read,
+                                  int32_t readLen,
+                                  int32_t match,
+                                  int32_t mismatch,
+                                  int32_t gap_open,
+                                  int32_t gap_extension) {
 
     uint16_t* mH = (uint16_t*)alignment->mH;
-    int32_t i = refEnd;
-    int32_t j = readEnd;
+    int32_t i = *refEnd;
+    int32_t j = *readEnd;
     // find maximum
     uint16_t h = mH[readLen*i + j];
-	cigar* result = (cigar*)malloc(sizeof(cigar));
+	cigar* result = (cigar*)calloc(1, sizeof(cigar));
     result->length = 0;
 
-    while (LIKELY(h != 0 && i > 0 && j > 0)) {
+    while (LIKELY(h != 0 && i >= 0 && j >= 0)) {
         //printf("h=%i i=%i j=%i\n", h, i, j);
         // look at neighbors
-        int32_t d = mH[readLen*(i-1) + (j-1)];
-        int32_t l = mH[readLen*(i-1) + j];
-        int32_t u = mH[readLen*i + (j-1)];
+        int32_t d = 0, l = 0, u = 0;
+        if (i > 0 && j > 0) {
+            d = mH[readLen*(i-1) + (j-1)];
+        }
+        if (i > 0) {
+            l = mH[readLen*(i-1) + j];
+        }
+        if (j > 0) {
+            u = mH[readLen*i + (j-1)];
+        }
         // get the max of the three directions
         int32_t n = (l > u ? l : u);
         n = (h > n ? h : n);
-        if (h == n && ((d + match == h && ref[i] == read[j]) || (d - mismatch == h && ref[i] != read[j]))) {
+        if (h == n &&
+            ((d + match == h && ref[i] == read[j])
+             || (d - mismatch == h && ref[i] != read[j]))) {
             add_element(result, 'M', 1);
             h = d;
             --i; --j;
@@ -921,17 +948,189 @@ cigar* trace_back_word (s_align* alignment,
             h = u;
             --j;
         } else {
+            // this is not an error if we are tracing back across a graph
+            break;
             fprintf(stderr, "traceback error\n");
             fprintf(stderr, "h=%i i=%i j=%i\n", h, i, j);
             fprintf(stderr, "d=%i, u=%i, l=%i\n", d, u, l);
             h = d; --i; --j;
         }
     }
-    if (h == match) { // we hit the edge but score was not 0
-        add_element(result, 'M', 1);
-    }
+
+    *score = h;
+
     reverse_cigar(result);
+    *refEnd = i;
+    *readEnd = j;
     return result;
+}
+
+graph_cigar* graph_cigar_create(void) {
+    return (graph_cigar*)calloc(1, sizeof(graph_cigar));
+}
+
+void graph_cigar_destroy(graph_cigar* g) {
+    free(g->elements);
+    free(g);
+}
+
+void print_graph_cigar(graph_cigar* g) {
+    int32_t i;
+    node_cigar* nc = g->elements;
+    for (i = 0; i < g->length; ++i, ++nc) {
+        fprintf(stdout, "%u[", nc->node->id);
+        print_cigar(nc->cigar);
+        fprintf(stdout, "]");
+    }
+    fprintf(stdout, "\n");
+}
+
+void reverse_graph_cigar(graph_cigar* c) {
+	graph_cigar* reversed = (graph_cigar*)malloc(sizeof(graph_cigar));
+    reversed->length = c->length;
+	reversed->elements = (node_cigar*) malloc(c->length * sizeof(node_cigar));
+    node_cigar* c1 = c->elements;
+    node_cigar* c2 = reversed->elements;
+	int32_t s = 0;
+	int32_t e = c->length - 1;
+	while (LIKELY(s <= e)) {
+		c2[s] = c1[e];
+		c2[e] = c1[s];
+		++ s;
+		-- e;
+	}
+    free(c->elements);
+    c->elements = reversed->elements;
+    free(reversed);
+}
+
+graph_cigar* graph_trace_back (graph* graph,
+                               char* read,
+                               int32_t readLen,
+                               int32_t match,
+                               int32_t mismatch,
+                               int32_t gap_open,
+                               int32_t gap_extension) {
+
+    graph_cigar* gc = graph_cigar_create();
+    uint32_t GRAPH_CIGAR_ALLOC_SIZE = 10;
+    gc->elements = calloc(1, GRAPH_CIGAR_ALLOC_SIZE*sizeof(node_cigar));
+    gc->length = 0;
+    
+    node* n = graph->max_node;
+    if (!n) {
+        fprintf(stderr, "Cannot trace back because graph alignment has not been run.\n");
+        fprintf(stderr, "You must call graph_fill(...) before tracing back.\n");
+        exit(1);
+    }
+    uint16_t score = n->alignment->score1;
+    uint8_t score_is_byte = (score >= 255) ? 0 : 1;
+    int32_t refEnd = n->alignment->ref_end1;
+    int32_t readEnd = n->alignment->read_end1;
+
+    node_cigar* nc = gc->elements;
+
+    while (score > 0) {
+        if (gc->length > 0 && gc->length == GRAPH_CIGAR_ALLOC_SIZE) {
+            gc->elements = realloc((void*)gc->elements,
+                                gc->length + GRAPH_CIGAR_ALLOC_SIZE*sizeof(node_cigar));
+        }
+        nc->cigar = alignment_trace_back (n->alignment,
+                                          &score,
+                                          &refEnd,
+                                          &readEnd,
+                                          n->seq,
+                                          n->len,
+                                          read,
+                                          readLen,
+                                          match,
+                                          mismatch,
+                                          gap_open,
+                                          gap_extension);
+        nc->node = n;
+        ++gc->length;
+        if (score == 0) {
+            break;
+        }
+        // the read did not complete here
+        // check that we are at 0 in reference and > 0 in read
+        /*
+        if (readEnd == 0 || readEnd != 0) {
+            fprintf(stderr, "graph traceback error, at end of read or ref but score not 0\n");
+            exit(1);
+        }
+        */
+
+        // so check its inbound nodes at the given read end position
+        int32_t i;
+        node* max_prev = NULL;
+        uint16_t l = 0, d = 0, max_score = 0;
+        uint8_t max_diag = 1;
+        
+        if (score_is_byte) {
+            for (i = 0; i < n->count_prev; ++i) {
+                // we have to check the left and diagonal directions
+                // vertical would stay on this node
+                node* cn = n->prev[i];
+                //n->alignment->mH[i];
+                l = ((uint8_t*)cn->alignment->mH)[readLen*(readEnd)   + (cn->len-1)];
+                d = ((uint8_t*)cn->alignment->mH)[readLen*(readEnd-1) + (cn->len-1)];
+                if (d > max_score) {
+                    max_score = d;
+                    max_prev = cn;
+                    max_diag = 1;
+                } else if (l > max_score) {
+                    max_score = l;
+                    max_prev = cn;
+                    max_diag = 0;
+                }
+            }
+        } else {
+            for (i = 0; i < n->count_prev; ++i) {
+                // we have to check the left and diagonal directions
+                // vertical would stay on this node
+                node* cn = n->prev[i];
+                //n->alignment->mH[i];
+                l = ((uint16_t*)cn->alignment->mH)[readLen*(readEnd)   + (cn->len-1)];
+                d = ((uint16_t*)cn->alignment->mH)[readLen*(readEnd-1) + (cn->len-1)];
+                if (d > max_score) {
+                    max_score = d;
+                    max_prev = cn;
+                    max_diag = 1;
+                } else if (l > max_score) {
+                    max_score = l;
+                    max_prev = cn;
+                    max_diag = 0;
+                }
+            }
+        }
+
+        //gc->elems[gc->length-1] = *nc;
+    
+        // and determine max among possible transitions
+        // set node
+        // determine traceback direction
+        // did the read complete here?
+        // go to ending position, look at neighbors across all inbound nodes
+        n = max_prev;
+        // update ref end repeat
+        refEnd = n->len - 1;
+        if (max_diag) {
+            --readEnd;
+            add_element(nc->cigar, 'M', 1);
+        } else {
+            add_element(nc->cigar, 'D', 1);
+        }
+        ++nc;
+
+        // ehhhh TODO direction
+    }
+
+    // 
+    reverse_graph_cigar(gc);
+
+    return gc;
+
 }
 
 void add_element(cigar* c, char type, uint32_t length) {
@@ -994,18 +1193,20 @@ void seed_destroy(s_seed* s) {
     free(s);
 }
 
-node* node_create(const char* id,
+node* node_create(const char* name,
+                  const uint32_t id,
                   const char* seq,
                   const int8_t* nt_table,
                   const int8_t* score_matrix) {
     node* n = calloc(1, sizeof(node));
     int32_t len = strlen(seq);
-    int32_t idlen = strlen(id);
+    int32_t namelen = strlen(name);
+    n->id = id;
     n->len = len;
     n->seq = (char*)malloc(len);
     strncpy(n->seq, seq, len);
-    n->id = (char*)malloc(idlen);
-    strncpy(n->id, id, idlen);
+    n->name = (char*)malloc(namelen);
+    strncpy(n->name, name, namelen);
     n->num = create_num(seq, len, nt_table);
     n->count_prev = 0; // are these be set == 0 by calloc?
     n->count_next = 0;
@@ -1026,7 +1227,7 @@ void profile_destroy(s_profile* prof) {
 }
 
 void node_destroy(node* n) {
-    free(n->id);
+    free(n->name);
     free(n->seq);
     free(n->num);
     free(n->prev);
@@ -1067,13 +1268,11 @@ s_seed* create_seed_byte(int32_t readLen, node** prev, int32_t count) {
     }
     memset(seed->pvE,      0, segLen*sizeof(__m128i));
     memset(seed->pvHStore, 0, segLen*sizeof(__m128i));
-    fprintf(stderr, "i make here %i nodes\n", count);
     // take the max of all inputs
     __m128i pvE = vZero, pvH = vZero, ovE = vZero, ovH = vZero;
     for (j = 0; j < segLen; ++j) {
         pvE = vZero; pvH = vZero;
         for (k = 0; k < count; ++k) {
-            fprintf(stderr, "i make yes %i\n", k);
             ovE = _mm_load_si128(prev[k]->alignment->seed.pvE + j);
             ovH = _mm_load_si128(prev[k]->alignment->seed.pvHStore + j);
             pvE = _mm_max_epu8(pvE, ovE);
@@ -1126,6 +1325,7 @@ graph_fill (graph* graph,
     int8_t* read_num = create_num(read_seq, read_length, nt_table);
 	s_profile* prof = ssw_init(read_num, read_length, score_matrix, 5, 2);
     s_seed* seed = NULL;
+    uint16_t max_score = 0;
 
     // for each node, from start to finish in the partial order (which should be sorted topologically)
     // generate a seed from input nodes or use existing (e.g. for subgraph traversal here)
@@ -1141,12 +1341,19 @@ graph_fill (graph* graph,
         }
         node_fill(n, prof, weight_gapO, weight_gapE, maskLen, seed);
         seed_destroy(seed); seed = NULL; // cleanup seed
-        if (n->alignment->score1 > 255) {
+        // test if we have exceeded the score dynamic range
+        if (prof->profile_byte && n->alignment->score1 > 255) {
             // re-run with width 8 (16-bit precision scores)
             free(prof->profile_byte);
             prof->profile_byte = NULL;
             npp = &graph->nodes[0];
             i = 0; // reset iteration
+            max_score = 0;
+        } else {
+            if (!graph->max_node || n->alignment->score1 > max_score) {
+                graph->max_node = n;
+                max_score = n->alignment->score1;
+            }
         }
     }
 
@@ -1233,9 +1440,14 @@ graph* graph_create(uint32_t size) {
     return g;
 }
 
+void graph_clear_alignment(graph* g) {
+    g->max_node = NULL;
+}
+
 void graph_destroy(graph* g) {
-    
+    g->max_node = NULL;
     free(g->nodes);
+    g->nodes = NULL;
     free(g);
 }
 
@@ -1243,7 +1455,7 @@ int32_t graph_add_node(graph* graph, node* node) {
     const int32_t graph_realloc_size = 1024;
     if (graph->size % graph_realloc_size == 0) {
         graph->size += graph_realloc_size;
-        if (UNLIKELY(!realloc((void*)graph->nodes, graph->size * sizeof(void*)))) {
+        if (UNLIKELY(!(graph->nodes = realloc((void*)graph->nodes, graph->size * sizeof(void*))))) {
             fprintf(stderr, "could not allocate memory for graph\n"); exit(1);
         }
     }

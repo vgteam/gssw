@@ -44,8 +44,8 @@ int main (int argc, char * const argv[]) {
 	int8_t* mat = create_score_matrix(match, mismatch);
 
     node* nodes[2];
-    nodes[0] = (node*)node_create("A", ref_seq_1, nt_table, mat);
-    nodes[1] = (node*)node_create("B", ref_seq_2, nt_table, mat);
+    nodes[0] = (node*)node_create("A", 1, ref_seq_1, nt_table, mat);
+    nodes[1] = (node*)node_create("B", 2, ref_seq_2, nt_table, mat);
 
     nodes_add_edge(nodes[0], nodes[1]);
 
@@ -57,7 +57,16 @@ int main (int argc, char * const argv[]) {
 
     graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 15);
     graph_print_score_matrices(graph, read_seq, strlen(read_seq));
+    graph_cigar* gc = graph_trace_back (graph,
+                                        read_seq,
+                                        strlen(read_seq),
+                                        match,
+                                        mismatch,
+                                        gap_open,
+                                        gap_extension);
 
+    print_graph_cigar(gc);
+    graph_cigar_destroy(gc);
     graph_destroy(graph);
     node_destroy(nodes[0]);
     node_destroy(nodes[1]);

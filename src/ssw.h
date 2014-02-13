@@ -67,8 +67,8 @@ typedef struct {
 } cigar_element;
 
 typedef struct {
-    cigar_element* elements;
     int32_t length;
+    cigar_element* elements;
 } cigar;
 
 struct _profile{
@@ -85,10 +85,11 @@ struct _profile{
 //typedef struct node s_node;
 typedef struct node node;
 typedef struct node {
-    char* id;
+    char* name;
+    uint32_t id;
     char* seq; // sequence
     int8_t* num; // numerical conversion of seq
-    int32_t len;
+    int32_t len; // length of sequence
     node** prev;
     int32_t count_prev;
     node** next;
@@ -117,8 +118,20 @@ typedef struct {
 
 typedef struct {
     uint32_t size;
+    node* max_node;
     node** nodes;
 } graph;
+
+typedef struct {
+    node* node;
+    cigar* cigar;
+} node_cigar;
+
+typedef struct {
+    uint32_t length;   // number of nodes traversed
+    uint32_t position; // position in first node
+    node_cigar* elements; // describes traceback
+} graph_cigar;
 
 
 
@@ -260,41 +273,52 @@ void print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen,
     @param alignment  Alignment structure.
     @param end        Alignment ending position.
 */
-cigar* trace_back_byte (s_align* alignment,
-                        int32_t refEnd,
-                        int32_t readEnd,
-                        char* ref,
-                        int32_t refLen,
-                        char* read,
-                        int32_t readLen,
-                        int32_t match,
-                        int32_t mismatch,
-                        int32_t gap_open,
-                        int32_t gap_extension);
+cigar* alignment_trace_back_byte (s_align* alignment,
+                                  uint16_t* score,
+                                  int32_t* refEnd,
+                                  int32_t* readEnd,
+                                  char* ref,
+                                  int32_t refLen,
+                                  char* read,
+                                  int32_t readLen,
+                                  int32_t match,
+                                  int32_t mismatch,
+                                  int32_t gap_open,
+                                  int32_t gap_extension);
 
-cigar* trace_back_word (s_align* alignment,
-                        int32_t refEnd,
-                        int32_t readEnd,
-                        char* ref,
-                        int32_t refLen,
-                        char* read,
-                        int32_t readLen,
-                        int32_t match,
-                        int32_t mismatch,
-                        int32_t gap_open,
-                        int32_t gap_extension);
+cigar* alignment_trace_back_word (s_align* alignment,
+                                  uint16_t* score,
+                                  int32_t* refEnd,
+                                  int32_t* readEnd,
+                                  char* ref,
+                                  int32_t refLen,
+                                  char* read,
+                                  int32_t readLen,
+                                  int32_t match,
+                                  int32_t mismatch,
+                                  int32_t gap_open,
+                                  int32_t gap_extension);
 
-cigar* trace_back (s_align* alignment,
-                   int32_t refEnd,
-                   int32_t readEnd,
-                   char* ref,
-                   int32_t refLen,
-                   char* read,
-                   int32_t readLen,
-                   int32_t match,
-                   int32_t mismatch,
-                   int32_t gap_open,
-                   int32_t gap_extension);
+cigar* alignment_trace_back (s_align* alignment,
+                             uint16_t* score,
+                             int32_t* refEnd,
+                             int32_t* readEnd,
+                             char* ref,
+                             int32_t refLen,
+                             char* read,
+                             int32_t readLen,
+                             int32_t match,
+                             int32_t mismatch,
+                             int32_t gap_open,
+                             int32_t gap_extension);
+
+graph_cigar* graph_trace_back (graph* graph,
+                               char* read,
+                               int32_t readLen,
+                               int32_t match,
+                               int32_t mismatch,
+                               int32_t gap_open,
+                               int32_t gap_extension);
 
 /*! @function         Return 1 if the alignment is in 16/128bit (byte sized) or 0 if word-sized.
     @param alignment  Alignment structure.
@@ -318,7 +342,8 @@ void reverse_cigar(cigar* c);
 void print_cigar(cigar* c);
 void cigar_destroy(cigar* c);
 
-node* node_create(const char* id,
+node* node_create(const char* name,
+                  const uint32_t id,
                   const char* seq,
                   const int8_t* nt_table,
                   const int8_t* score_matrix);
@@ -347,8 +372,21 @@ graph_fill (graph* graph,
 
 graph* graph_create(uint32_t size);
 int32_t graph_add_node(graph* graph, node* node);
+void graph_clear(graph* graph);
 void graph_destroy(graph* graph);
 void graph_print_score_matrices(graph* graph, char* read, int32_t readLen);
+
+graph_cigar* graph_trace_back (graph* graph,
+                               char* read,
+                               int32_t readLen,
+                               int32_t match,
+                               int32_t mismatch,
+                               int32_t gap_open,
+                               int32_t gap_extension);
+
+graph_cigar* graph_cigar_create(void);
+void graph_cigar_destroy(graph_cigar* g);
+void print_graph_cigar(graph_cigar* g);
 
 // some utility functions
 int8_t* create_score_matrix(int32_t match, int32_t mismatch);
