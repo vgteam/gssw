@@ -714,7 +714,6 @@ s_align* align_create (void) {
 }
 
 void align_destroy (s_align* a) {
-	//free(a->cigar);
     align_clear_matrix_and_seed(a);
 	free(a);
 }
@@ -808,7 +807,7 @@ cigar* alignment_trace_back (s_align* alignment,
                                          gap_open,
                                          gap_extension);
     } else {
-        return alignment_trace_back_byte(alignment,
+        return alignment_trace_back_word(alignment,
                                          score,
                                          refEnd,
                                          readEnd,
@@ -845,7 +844,6 @@ cigar* alignment_trace_back_byte (s_align* alignment,
     result->length = 0;
 
     while (LIKELY(h != 0 && i >= 0 && j >= 0)) {
-        //printf("h=%i i=%i j=%i\n", h, i, j);
         // look at neighbors
         int32_t d = 0, l = 0, u = 0;
         if (i > 0 && j > 0) {
@@ -918,7 +916,6 @@ cigar* alignment_trace_back_word (s_align* alignment,
     result->length = 0;
 
     while (LIKELY(h != 0 && i >= 0 && j >= 0)) {
-        //printf("h=%i i=%i j=%i\n", h, i, j);
         // look at neighbors
         int32_t d = 0, l = 0, u = 0;
         if (i > 0 && j > 0) {
@@ -1020,7 +1017,7 @@ graph_cigar* graph_trace_back (graph* graph,
     uint32_t GRAPH_CIGAR_ALLOC_SIZE = 10;
     gc->elements = calloc(1, GRAPH_CIGAR_ALLOC_SIZE*sizeof(node_cigar));
     gc->length = 0;
-    
+
     node* n = graph->max_node;
     if (!n) {
         fprintf(stderr, "Cannot trace back because graph alignment has not been run.\n");
@@ -1070,15 +1067,21 @@ graph_cigar* graph_trace_back (graph* graph,
         node* max_prev = NULL;
         uint16_t l = 0, d = 0, max_score = 0;
         uint8_t max_diag = 1;
-        
+
+
+        // determine direction across edge
+
+        // rationale: we have to check the left and diagonal directions
+        // vertical would stay on this node even if we are in the last column
+
+        // note that the loop is split depending on alignment score width...
+        // this is done out of paranoia that optimization will not factor two loops into two if there
+        // is an if statement with a consistent result inside of each iteration
         if (score_is_byte) {
             for (i = 0; i < n->count_prev; ++i) {
-                // we have to check the left and diagonal directions
-                // vertical would stay on this node
                 node* cn = n->prev[i];
-                //n->alignment->mH[i];
-                l = ((uint8_t*)cn->alignment->mH)[readLen*(readEnd)   + (cn->len-1)];
-                d = ((uint8_t*)cn->alignment->mH)[readLen*(readEnd-1) + (cn->len-1)];
+                l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
+                d = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
                 if (d > max_score) {
                     max_score = d;
                     max_prev = cn;
@@ -1091,12 +1094,9 @@ graph_cigar* graph_trace_back (graph* graph,
             }
         } else {
             for (i = 0; i < n->count_prev; ++i) {
-                // we have to check the left and diagonal directions
-                // vertical would stay on this node
                 node* cn = n->prev[i];
-                //n->alignment->mH[i];
-                l = ((uint16_t*)cn->alignment->mH)[readLen*(readEnd)   + (cn->len-1)];
-                d = ((uint16_t*)cn->alignment->mH)[readLen*(readEnd-1) + (cn->len-1)];
+                l = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
+                d = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
                 if (d > max_score) {
                     max_score = d;
                     max_prev = cn;
@@ -1108,8 +1108,6 @@ graph_cigar* graph_trace_back (graph* graph,
                 }
             }
         }
-
-        //gc->elems[gc->length-1] = *nc;
     
         // and determine max among possible transitions
         // set node
@@ -1127,7 +1125,6 @@ graph_cigar* graph_trace_back (graph* graph,
         }
         ++nc;
 
-        // ehhhh TODO direction
     }
 
     // 
