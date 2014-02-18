@@ -962,6 +962,23 @@ cigar* alignment_trace_back_word (s_align* alignment,
     return result;
 }
 
+graph_mapping* graph_mapping_create(void) {
+    graph_mapping* m = (graph_mapping*)calloc(1, sizeof(graph_mapping));
+    return m;
+}
+
+void graph_mapping_destroy(graph_mapping* m) {
+    //graph_cigar_destroy(&m->cigar);
+    int32_t i;
+    graph_cigar* g = &m->cigar;
+    for (i = 0; i < g->length; ++i) {
+        cigar_destroy(g->elements[i].cigar);
+    }
+    free(g->elements);
+    //free(g);
+    free(m);
+}
+
 graph_cigar* graph_cigar_create(void) {
     return (graph_cigar*)calloc(1, sizeof(graph_cigar));
 }
@@ -986,6 +1003,11 @@ void print_graph_cigar(graph_cigar* g) {
     fprintf(stdout, "\n");
 }
 
+void print_graph_mapping(graph_mapping* gm) {
+    fprintf(stdout, "%i:", gm->position);
+    print_graph_cigar(&gm->cigar);
+}
+
 void reverse_graph_cigar(graph_cigar* c) {
 	graph_cigar* reversed = (graph_cigar*)malloc(sizeof(graph_cigar));
     reversed->length = c->length;
@@ -1005,15 +1027,16 @@ void reverse_graph_cigar(graph_cigar* c) {
     free(reversed);
 }
 
-graph_cigar* graph_trace_back (graph* graph,
-                               char* read,
-                               int32_t readLen,
-                               int32_t match,
-                               int32_t mismatch,
-                               int32_t gap_open,
-                               int32_t gap_extension) {
+graph_mapping* graph_trace_back (graph* graph,
+                                 char* read,
+                                 int32_t readLen,
+                                 int32_t match,
+                                 int32_t mismatch,
+                                 int32_t gap_open,
+                                 int32_t gap_extension) {
 
-    graph_cigar* gc = graph_cigar_create();
+    graph_mapping* gm = graph_mapping_create();
+    graph_cigar* gc = &gm->cigar;
     uint32_t GRAPH_CIGAR_ALLOC_SIZE = 10;
     gc->elements = calloc(1, GRAPH_CIGAR_ALLOC_SIZE*sizeof(node_cigar));
     gc->length = 0;
@@ -1130,7 +1153,9 @@ graph_cigar* graph_trace_back (graph* graph,
     // 
     reverse_graph_cigar(gc);
 
-    return gc;
+    gm->position = refEnd + 1;
+
+    return gm;
 
 }
 

@@ -40,8 +40,8 @@ int main (int argc, char * const argv[]) {
     node* nodes[4];
     nodes[0] = (node*)node_create("A", 1, ref_seq_1, nt_table, mat);
     nodes[1] = (node*)node_create("B", 2, ref_seq_2, nt_table, mat);
-    nodes[2] = (node*)node_create("C", 2, ref_seq_3, nt_table, mat);
-    nodes[3] = (node*)node_create("D", 2, ref_seq_4, nt_table, mat);
+    nodes[2] = (node*)node_create("C", 3, ref_seq_3, nt_table, mat);
+    nodes[3] = (node*)node_create("D", 4, ref_seq_4, nt_table, mat);
 
     // makes a diamond
     nodes_add_edge(nodes[0], nodes[1]);
@@ -57,16 +57,16 @@ int main (int argc, char * const argv[]) {
 
     graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 15, 2);
     graph_print_score_matrices(graph, read_seq, strlen(read_seq));
-    graph_cigar* gc = graph_trace_back (graph,
-                                        read_seq,
-                                        strlen(read_seq),
-                                        match,
-                                        mismatch,
-                                        gap_open,
-                                        gap_extension);
+    graph_mapping* gm = graph_trace_back (graph,
+                                          read_seq,
+                                          strlen(read_seq),
+                                          match,
+                                          mismatch,
+                                          gap_open,
+                                          gap_extension);
 
-    print_graph_cigar(gc);
-    graph_cigar_destroy(gc);
+    print_graph_mapping(gm);
+    graph_mapping_destroy(gm);
     graph_destroy(graph);
     node_destroy(nodes[0]);
     node_destroy(nodes[1]);
