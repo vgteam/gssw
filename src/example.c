@@ -50,10 +50,12 @@ int main (int argc, char * const argv[]) {
     gssw_nodes_add_edge(nodes[1], nodes[2]);
 
     gssw_graph* graph = gssw_graph_create(4);
-    memcpy((void*)graph->nodes, (void*)nodes, 4*sizeof(gssw_node*));
-    graph->size = 4;
-    //graph_add_node(graph, nodes[0]);
-    //graph_add_node(graph, nodes[1]);
+    //memcpy((void*)graph->nodes, (void*)nodes, 4*sizeof(gssw_node*));
+    //graph->size = 4;
+    gssw_graph_add_node(graph, nodes[0]);
+    gssw_graph_add_node(graph, nodes[1]);
+    gssw_graph_add_node(graph, nodes[2]);
+    gssw_graph_add_node(graph, nodes[3]);
 
     gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 15, 2);
     gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq));

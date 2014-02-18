@@ -1477,6 +1477,7 @@ void gssw_graph_destroy(gssw_graph* g) {
 }
 
 int32_t gssw_graph_add_node(gssw_graph* graph, gssw_node* node) {
+    /*
     const int32_t graph_realloc_size = 1024;
     if (graph->size % graph_realloc_size == 0) {
         graph->size += graph_realloc_size;
@@ -1484,8 +1485,10 @@ int32_t gssw_graph_add_node(gssw_graph* graph, gssw_node* node) {
             fprintf(stderr, "could not allocate memory for graph\n"); exit(1);
         }
     }
-    graph->nodes[graph->size] = node;
+    */
     ++graph->size;
+    graph->nodes = realloc((void*)graph->nodes, graph->size * sizeof(void*));
+    graph->nodes[graph->size-1] = node;
     return graph->size;
 }
 
