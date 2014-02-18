@@ -1,5 +1,5 @@
 
-# *GSSW* string to graph aligner
+# *GSSW (string to graph aligner)*
 ## An *Generalized* SIMD Smith-Waterman C/C++ Library for Use in Genomic Applications
 
 ### Author: Erik Garrison, Mengyao Zhao, Wan-Ping Lee, Erik Garrison
