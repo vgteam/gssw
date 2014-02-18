@@ -19,13 +19,13 @@
 #include <emmintrin.h>
 
 /*!	@typedef	structure of the query profile	*/
-struct _profile;
-typedef struct _profile s_profile;
+struct gssw_profile;
+typedef struct gssw_profile gssw_profile;
 
 typedef struct {
     __m128i* pvE;
     __m128i* pvHStore;
-} s_seed;
+} gssw_seed;
 
 
 /*!	@typedef	structure of the alignment result
@@ -50,28 +50,28 @@ typedef struct {
 	int32_t	read_begin1;
 	int32_t read_end1;
 	int32_t ref_end2;
-    s_seed seed;
+    gssw_seed seed;
     uint8_t is_byte;
     void* mH;
-} s_align;
+} gssw_align;
 
 typedef struct {
 	uint16_t score;
 	int32_t ref;	 //0-based position
 	int32_t read;    //alignment ending position on read, 0-based
-} alignment_end;
+} gssw_alignment_end;
 
 typedef struct {
     char type;
     uint32_t length;
-} cigar_element;
+} gssw_cigar_element;
 
 typedef struct {
     int32_t length;
-    cigar_element* elements;
-} cigar;
+    gssw_cigar_element* elements;
+} gssw_cigar;
 
-struct _profile{
+struct gssw_profile{
 	__m128i* profile_byte;	// 0: none
 	__m128i* profile_word;	// 0: none
 	const int8_t* read;
@@ -83,59 +83,54 @@ struct _profile{
 
 //struct node;
 //typedef struct node s_node;
-typedef struct node node;
-typedef struct node {
+typedef struct gssw_node gssw_node;
+typedef struct gssw_node {
     char* name;
     uint32_t id;
     char* seq; // sequence
     int8_t* num; // numerical conversion of seq
     int32_t len; // length of sequence
-    node** prev;
+    gssw_node** prev;
     int32_t count_prev;
-    node** next;
+    gssw_node** next;
     int32_t count_next;
-    s_align* alignment;
-} node;
+    gssw_align* alignment;
+} gssw_node;
 
 typedef struct {
-    node* node;
-    cigar cigar;
+    gssw_node* node;
+    gssw_cigar cigar;
     int32_t ref_begin;
 	int32_t ref_end;
 	int32_t	read_begin;
 	int32_t read_end;
-} node_mapping;
+} gssw_node_mapping;
 
 typedef struct {
-    int32_t length;
-    node_mapping* nodes;
-} path;
-
-typedef struct {
-    node* node;
-    alignment_end end;
-} node_alignment_end;
+    gssw_node* node;
+    gssw_alignment_end end;
+} gssw_node_alignment_end;
 
 typedef struct {
     uint32_t size;
-    node* max_node;
-    node** nodes;
-} graph;
+    gssw_node* max_node;
+    gssw_node** nodes;
+} gssw_graph;
 
 typedef struct {
-    node* node;
-    cigar* cigar;
-} node_cigar;
+    gssw_node* node;
+    gssw_cigar* cigar;
+} gssw_node_cigar;
 
 typedef struct {
     uint32_t length;   // number of nodes traversed
-    node_cigar* elements; // describes traceback
-} graph_cigar;
+    gssw_node_cigar* elements; // describes traceback
+} gssw_graph_cigar;
 
 typedef struct {
     int32_t position; // position in first node
-    graph_cigar cigar;
-} graph_mapping;
+    gssw_graph_cigar cigar;
+} gssw_graph_mapping;
 
 
 
@@ -161,14 +156,14 @@ extern "C" {
 			 -2 -2 -2  2 //T
 			mat is the pointer to the array {2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2}
 */
-s_profile* ssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n, const int8_t score_size);
+gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n, const int8_t score_size);
 
 /*!	@function	Release the memory allocated by function ssw_init.
 	@param	p	pointer to the query profile structure
 */
-void init_destroy (s_profile* p);
+void gssw_init_destroy (gssw_profile* p);
 
-s_align* align_create(void);
+gssw_align* gssw_align_create(void);
 
 
 // @function	ssw alignment.
@@ -204,15 +199,15 @@ s_align* align_create(void);
 			while bit 8 is not, the function will return cigar only when both criteria are fulfilled. All returned positions are
 			0-based coordinate.
 */
-s_align* ssw_align (const s_profile* prof,
-					const int8_t* ref,
-					int32_t refLen,
-					const uint8_t weight_gapO,
-					const uint8_t weight_gapE,
-					const uint8_t flag,
-					const uint16_t filters,
-					const int32_t filterd,
-					const int32_t maskLen);
+gssw_align* gssw_ssw_align (const gssw_profile* prof,
+                            const int8_t* ref,
+                            int32_t refLen,
+                            const uint8_t weight_gapO,
+                            const uint8_t weight_gapE,
+                            const uint8_t flag,
+                            const uint16_t filters,
+                            const int32_t filterd,
+                            const int32_t maskLen);
 
 // @function	ssw fill.
 /*!	@function	Do Striped Smith-Waterman alignment, but do not generate cigar.  Only return best score, filled matrix, and last E vector.
@@ -247,87 +242,91 @@ s_align* ssw_align (const s_profile* prof,
 			while bit 8 is not, the function will return cigar only when both criteria are fulfilled. All returned positions are
 			0-based coordinate.
 */
-s_align* ssw_fill (const s_profile* prof,
-                   const int8_t* ref,
-                   const int32_t refLen,
-                   const uint8_t weight_gapO,
-                   const uint8_t weight_gapE,
-                   const int32_t maskLen,
-                   s_seed* seed);
+gssw_align* gssw_ssw_fill (const gssw_profile* prof,
+                           const int8_t* ref,
+                           const int32_t refLen,
+                           const uint8_t weight_gapO,
+                           const uint8_t weight_gapE,
+                           const int32_t maskLen,
+                           gssw_seed* seed);
 
 
 /*!	@function	Release the memory allocated by function ssw_align.
 	@param	a	pointer to the alignment result structure
 */
-void align_destroy (s_align* a);
+void gssw_align_destroy (gssw_align* a);
 
 /*!	@function	Release the memory allocated for mH and pvE in s_align.
 	@param	a	pointer to the alignment result structure
 */
-void align_clear_matrix_and_seed (s_align* a);
+void gssw_align_clear_matrix_and_seed (gssw_align* a);
 
 /*! @function       Print score matrix, determines stride from result score
     @param refLen   Reference length.
     @param readLen  Read length.
     @param result   Alignment result.
 */
-void print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen, s_align* alignment);
+void gssw_print_score_matrix (char* ref,
+                              int32_t refLen,
+                              char* read,
+                              int32_t readLen,
+                              gssw_align* alignment);
 
 /*! @function         Trace back alignment across score matrix stored in alignment structure
     @param alignment  Alignment structure.
     @param end        Alignment ending position.
 */
-cigar* alignment_trace_back_byte (s_align* alignment,
-                                  uint16_t* score,
-                                  int32_t* refEnd,
-                                  int32_t* readEnd,
-                                  char* ref,
-                                  int32_t refLen,
-                                  char* read,
-                                  int32_t readLen,
-                                  int32_t match,
-                                  int32_t mismatch,
-                                  int32_t gap_open,
-                                  int32_t gap_extension);
+gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
+                                            uint16_t* score,
+                                            int32_t* refEnd,
+                                            int32_t* readEnd,
+                                            char* ref,
+                                            int32_t refLen,
+                                            char* read,
+                                            int32_t readLen,
+                                            int32_t match,
+                                            int32_t mismatch,
+                                            int32_t gap_open,
+                                            int32_t gap_extension);
 
-cigar* alignment_trace_back_word (s_align* alignment,
-                                  uint16_t* score,
-                                  int32_t* refEnd,
-                                  int32_t* readEnd,
-                                  char* ref,
-                                  int32_t refLen,
-                                  char* read,
-                                  int32_t readLen,
-                                  int32_t match,
-                                  int32_t mismatch,
-                                  int32_t gap_open,
-                                  int32_t gap_extension);
+gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
+                                            uint16_t* score,
+                                            int32_t* refEnd,
+                                            int32_t* readEnd,
+                                            char* ref,
+                                            int32_t refLen,
+                                            char* read,
+                                            int32_t readLen,
+                                            int32_t match,
+                                            int32_t mismatch,
+                                            int32_t gap_open,
+                                            int32_t gap_extension);
 
-cigar* alignment_trace_back (s_align* alignment,
-                             uint16_t* score,
-                             int32_t* refEnd,
-                             int32_t* readEnd,
-                             char* ref,
-                             int32_t refLen,
-                             char* read,
-                             int32_t readLen,
-                             int32_t match,
-                             int32_t mismatch,
-                             int32_t gap_open,
-                             int32_t gap_extension);
+gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
+                                       uint16_t* score,
+                                       int32_t* refEnd,
+                                       int32_t* readEnd,
+                                       char* ref,
+                                       int32_t refLen,
+                                       char* read,
+                                       int32_t readLen,
+                                       int32_t match,
+                                       int32_t mismatch,
+                                       int32_t gap_open,
+                                       int32_t gap_extension);
 
-graph_mapping* graph_trace_back (graph* graph,
-                                 char* read,
-                                 int32_t readLen,
-                                 int32_t match,
-                                 int32_t mismatch,
-                                 int32_t gap_open,
-                                 int32_t gap_extension);
-
+gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
+                                           char* read,
+                                           int32_t readLen,
+                                           int32_t match,
+                                           int32_t mismatch,
+                                           int32_t gap_open,
+                                           int32_t gap_extension);
+    
 /*! @function         Return 1 if the alignment is in 16/128bit (byte sized) or 0 if word-sized.
     @param alignment  Alignment structure.
 */
-int is_byte (s_align* alignment);
+int gssw_is_byte (gssw_align* alignment);
 
 /*! @function         Generate a traceback of the given alignment, using H, E, and F matrices
     @param alignment  Alignment structure.
@@ -336,65 +335,64 @@ int is_byte (s_align* alignment);
 */
 //cigar* traceback (s_align* alignment, int32_t readPos, int32_t refPos);
 
-void profile_destroy(s_profile* prof);
-void seed_destroy(s_seed* seed);
-s_seed* create_seed_byte(int32_t readLen, node** prev, int32_t count);
-s_seed* create_seed_word(int32_t readLen, node** prev, int32_t count);
+void gssw_profile_destroy(gssw_profile* prof);
+void gssw_seed_destroy(gssw_seed* seed);
+gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t count);
+gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t count);
 
-void add_element(cigar* c, char type, uint32_t length);
-void reverse_cigar(cigar* c);
-void print_cigar(cigar* c);
-void cigar_destroy(cigar* c);
+void gssw_add_element(gssw_cigar* c, char type, uint32_t length);
+void gssw_reverse_cigar(gssw_cigar* c);
+void gssw_print_cigar(gssw_cigar* c);
+void gssw_cigar_destroy(gssw_cigar* c);
 
-node* node_create(const char* name,
-                  const uint32_t id,
-                  const char* seq,
-                  const int8_t* nt_table,
-                  const int8_t* score_matrix);
-void node_destroy(node* n);
-//void node_clear_alignment(node* n);
-void node_add_prev(node* n, node* m);
-void node_add_next(node* n, node* m);
-void nodes_add_edge(node* n, node* m);
+gssw_node* gssw_node_create(const char* name,
+                            const uint32_t id,
+                            const char* seq,
+                            const int8_t* nt_table,
+                            const int8_t* score_matrix);
+void gssw_node_destroy(gssw_node* n);
+void gssw_node_add_prev(gssw_node* n, gssw_node* m);
+void gssw_node_add_next(gssw_node* n, gssw_node* m);
+void gssw_nodes_add_edge(gssw_node* n, gssw_node* m);
 
-node*
-node_fill (node* node,
-           const s_profile* prof,
-           const uint8_t weight_gapO,
-           const uint8_t weight_gapE,
-           const int32_t maskLen,
-           const s_seed* seed);
+gssw_node*
+gssw_node_fill (gssw_node* node,
+                const gssw_profile* prof,
+                const uint8_t weight_gapO,
+                const uint8_t weight_gapE,
+                const int32_t maskLen,
+                const gssw_seed* seed);
 
-graph*
-graph_fill (graph* graph,
-            const char* read_seq,
-            const int8_t* nt_table,
-            const int8_t* score_matrix,
-            const uint8_t weight_gapO,
-            const uint8_t weight_gapE,
-            const int32_t maskLen,
-            const int8_t score_size);
+gssw_graph*
+gssw_graph_fill (gssw_graph* graph,
+                 const char* read_seq,
+                 const int8_t* nt_table,
+                 const int8_t* score_matrix,
+                 const uint8_t weight_gapO,
+                 const uint8_t weight_gapE,
+                 const int32_t maskLen,
+                 const int8_t score_size);
 
-graph* graph_create(uint32_t size);
-int32_t graph_add_node(graph* graph, node* node);
-void graph_clear(graph* graph);
-void graph_destroy(graph* graph);
-void graph_print_score_matrices(graph* graph, char* read, int32_t readLen);
+gssw_graph* gssw_graph_create(uint32_t size);
+int32_t gssw_graph_add_node(gssw_graph* graph, gssw_node* node);
+void gssw_graph_clear(gssw_graph* graph);
+void gssw_graph_destroy(gssw_graph* graph);
+void gssw_graph_print_score_matrices(gssw_graph* graph, char* read, int32_t readLen);
 
-graph_mapping* graph_mapping_create(void);
-void graph_mapping_destroy(graph_mapping* m);
-graph_cigar* graph_cigar_create(void);
-void graph_cigar_destroy(graph_cigar* g);
-void print_graph_cigar(graph_cigar* g);
-void print_graph_mapping(graph_mapping* gm);
+gssw_graph_mapping* gssw_graph_mapping_create(void);
+void gssw_graph_mapping_destroy(gssw_graph_mapping* m);
+gssw_graph_cigar* gssw_graph_cigar_create(void);
+void gssw_graph_cigar_destroy(gssw_graph_cigar* g);
+void gssw_print_graph_cigar(gssw_graph_cigar* g);
+void gssw_print_graph_mapping(gssw_graph_mapping* gm);
 
 // some utility functions
-int8_t* create_score_matrix(int32_t match, int32_t mismatch);
-int8_t* create_nt_table(void);
-int8_t* create_num(const char* seq,
-                   const int32_t len,
-                   const int8_t* nt_table);
-
+int8_t* gssw_create_score_matrix(int32_t match, int32_t mismatch);
+int8_t* gssw_create_nt_table(void);
+int8_t* gssw_create_num(const char* seq,
+                        const int32_t len,
+                        const int8_t* nt_table);
+    
 #ifdef __cplusplus
 }
 #endif	// __cplusplus
