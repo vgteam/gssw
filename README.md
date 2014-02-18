@@ -1,54 +1,107 @@
 
 
-# *SSW Library*
-## An SIMD Smith-Waterman C/C++ Library for Use in Genomic Applications
+# *GSSW*
+## An *Generalized* SIMD Smith-Waterman C/C++ Library for Use in Genomic Applications
 
 ### License: MIT
 
 Copyright (c) 2012-2015 Boston College
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-Author: Mengyao Zhao, Wan-Ping Lee, Erik Garrison
+Author: Erik Garrison, Mengyao Zhao, Wan-Ping Lee, Erik Garrison
 
-Contact: Mengyao Zhao <zhangmp@bc.edu>
+Contact: Erik Garrison <erik.garrison@bc.edu>
+	 Mengyao Zhao <zhangmp@bc.edu>
 
-Last revision: 20/01/2014
+Last revision: 18/02/2014
 
 ## Overview
 
-SSW is a fast implementation of the Smith-Waterman algorithm, which uses the Single-Instruction Multiple-Data (SIMD) instructions 
-to parallelize the algorithm at the instruction level. SSW library provides an API that can be flexibly used by programs written in 
-C, C++ and other languages. We also provide a software that can do protein and genome alignment directly. Current version of our 
-implementation is ~50 times faster than an ordinary Smith-Waterman. It can return the Smith-Waterman score, alignment location and 
-traceback path (cigar) of the optimal alignment accurately; and return the sub-optimal alignment score and location heuristically.
+SSW is a fast implementation of the Smith-Waterman algorithm, which uses the
+Single-Instruction Multiple-Data (SIMD) instructions to parallelize the
+algorithm at the instruction level. SSW library provides an API that can be
+flexibly used by programs written in C, C++ and other languages. We also
+provide a software that can do protein and genome alignment directly. Current
+version of our implementation is ~50 times faster than an ordinary
+Smith-Waterman. It can return the Smith-Waterman score, alignment location and
+traceback path (cigar) of the optimal alignment accurately; and return the
+sub-optimal alignment score and location heuristically.
 
-This is a fork of the main [SSW implementation](https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library/tree/master/src)
-which allows access to the alignment score matrix and E vector.  This allows for the recursive application of the method to partial order alignment.
+This is an extension of the main 
+[SSW implementation](https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library/tree/master/src)
+which allows access to the alignment score matrix, H, and E vectors.  Using
+these features, we can extend the recurrence relation that defines the scores
+in the score matrix across junctions in the graph.  Affine gaps and gaps
+overlapping junctions in the graph are also supported.  Traceback is driven by
+storing the entire score matrix of each node (called the *H* matrix in the parlance
+of [Farrar's original paper on the striped variant of the Smith-Waterman
+algorithm](http://bioinformatics.oxfordjournals.org/content/23/2/156.short)).
+Due to the memory requirements of this approach, it is currently only feasible
+to use GSSW in a local context (e.g. reference and reads in the tens of
+thousands of bases).
+
+By constructing a graph using basic methods described in gssw.h, you can align
+reads against the graph and obtain a graph mapping comprised of a graph "cigar"
+describing the optimal alignment of the read across the nodes in the graph and
+the starting position of the alignment on the first node.  Nodes contain
+`(char*)`s pointers which could be used to link to arbitrary metadata.
+
+## Citation
+
+If you use this method the course of your work, please cite our article in PLOS One:
+[SSW Library: An SIMD Smith-Waterman C/C++ Library for Use in Genomic
+Applications](http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0082138)
+
+This article does not cover the generalization of the method to work on partial
+order graphs, but rather the underlying structure and performance of the API
+used to score alignments against the graph.
 
 ## How to use the API
 
-The API files include ssw.h and ssw.c, which can be directly used by any C or C++ program. For the C++ users who are more comfortable to use a C++ style interface, an additional C++ wrapper is provided with the file ssw\_cpp.cpp and ssw\_cpp.h. 
+The API files include gssw.h and gssw.c, which can be directly used by any C or
+C++ program. For the C++ users who are more comfortable to use a C++ style
+interface, an additional C++ wrapper is provided with the file ssw\_cpp.cpp and
+ssw\_cpp.h. 
 
 To use the C style API, please: 
 
-1. Download ssw.h and ssw.c, and put them in the same folder of your own program files.
-2. Write #include "ssw.h" into your file that will call the API functions.
+1. Download gssw.h and gssw.c, and put them in the same folder of your own
+program files.
+2. Write `#include "gssw.h"` into your file that will call the API functions.
 3. The API files are ready to be compiled together with your own C/C++ files.
 
-The API function descriptions are in the file ssw.h. One simple example of the API usage is example.c. The Smith-Waterman penalties need to be integers. Small penalty numbers such as: match: 2, mismatch: -1, gap open: -3, gap extension: -1 are recommended, which will lead to shorter running time.  
+The API function descriptions are in the file ssw.h. One simple example of the
+API usage is example.c. The Smith-Waterman penalties need to be integers. Small
+penalty numbers such as: match: 2, mismatch: -1, gap open: -3, gap extension:
+-1 are recommended, which will lead to shorter running time.  
 
+<!--
 To use the C++ style API, please: 
 
-1. Download ssw.h, ssw.c, ssw\_cpp.cpp and ssw\_cpp.h and put them in the same folder of your own program files.
+1. Download ssw.h, ssw.c, ssw\_cpp.cpp and ssw\_cpp.h and put them in the same
+folder of your own program files.
 2. Write #include "ssw\_cpp.h" into your file that will call the API functions.
 3. The API files are ready to be compiled together with your own C/C++ files.
 
-The API function descriptions are in the file ssw\_cpp.h. A simple example of using the C++ API is example.cpp.
+The API function descriptions are in the file ssw\_cpp.h. A simple example of
+using the C++ API is example.cpp.
 
 ## Speed and memory usage of the API
 
@@ -85,52 +138,5 @@ Memory usage: ~40MB
         -s	Output in SAM format. [default: no header]
         -h	If -s is used, include header in SAM output.
 
-## Software output
 
-The software can output SAM format or BLAST like format results. 
-
-
-SAM format output.  Example:
-
-    @HD VN:1.4  SO:queryname
-    @SQ SN:chr1 LN:1001
-    6:163296599:F:198;None;None/1   0   chr1    453 5   3M2D3M1D4M2D6M1D5M1D5M2I7M  *   0   0   CCAGCCCAAAATCTGTTTTAATGGTGGATTTGTGT *   AS:i:37 NM:i:11 ZS:i:28
-    3:153409880:F:224;None;3,153410143,G,A/1    0   chr1    523 4   2M1D32M1D3M1D6M1D8M *   0   0   GAAGAGTTAATTTAAGTCACTTCAAACAGATTACGTATCTTTTTTTTCCCT *   AS:i:42 NM:i:16 ZS:i:41
-    Y:26750420:R:-132;None;None/1   0   chr1    120 4   2M1I4M3D3M1I7M2I9M2D6M1I8M  *   0   0   AACAACAGAAGTTAATTAGCTTCAAAAATACTTTATATTTGCAA    *   AS:i:32 NM:i:16 ZS:i:29
-    13:91170622:R:-276;None;None/1  0   chr1    302 4   8M1D8M1D3M2D6M1D4M2I2M1D2M3D5M1I4M  *   0   0   CATTTATTGTTGTTTTTAAAGATTAAATGATTAAATGTTTCAAAA   *   AS:i:32 NM:i:18 ZS:i:30
-    15:37079528:R:-240;None;None/1  0   chr1    4   5   4M2D4M1D9M1I3M4I16M1I3M1D4M2D5M *   0   0   ACAGTGATGCCAAGCCAGTGGGTTTTAGCTTGTGGAGTTCCATAGGAGCGATGC  *   AS:i:30 NM:i:22 ZS:i:23
-    9:92308501:R:-176;None;None/1   0   chr1    142 4   4M3I5M4D10M2D4M1I2M2I6M5D1M1D6M2D3M *   0   0   AATAACCATAAAAATGGGCAAAGCAGCCTTCAGGGCTGCTGTTTCTA *   AS:i:26 NM:i:25 ZS:i:26
-    ...
-
-## What is the output?
-
-Please check the document "The SAM Format Specification" at: http://samtools.sourceforge.net/SAM1.pdf for the full description.
-The additional optional field "ZS" indicates the suboptimal alignment score. For example, the 1st record in the upper example means the optimal alignment score of the given sequence is 37; the suboptimal alignment score is 28; the mismatch and INDEL base count within the aligned fragment of the read is 11.
-
-An example of the BLAST like output:
-
-    target_name: chr1
-    query_name: 6:163296599:F:198;None;None/1
-    optimal_alignment_score: 37	sub-optimal_alignment_score: 28	strand: +
-    target_begin: 453	target_end: 492	query_begin: 17	query_end: 51
-
-    Target:      453    CCAATGCCACAAAACATCTGTCTCTAACTGGTG--TGTGTGT    492
-                        |||**|||*||||**||||||*|*|||*|||||**|*|||||
-    Query:        17    CCA--GCC-CAAA--ATCTGT-TTTAA-TGGTGGATTTGTGT    51
-
-    target_name: chr1
-    query_name: 3:153409880:F:224;None;3,153410143,G,A/1
-    optimal_alignment_score: 42	sub-optimal_alignment_score: 41	strand: +
-    target_begin: 523	target_end: 577	query_begin: 3	query_end: 53
-
-    Target:      523    GAGAGAGAAAATTTCACTCCCTCCATAAATCTCACAGTATTCTTTTCTTTTTCCT    577
-                        ||*||||**|||||*|*||*||*||*|*|**|*||*|||*||||||*||||*|||
-    Query:         3    GA-AGAGTTAATTTAAGTCACTTCAAACAGATTAC-GTA-TCTTTT-TTTTCCCT    53
-    ...
-
-## Citation
-
-http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0082138
-
-
-
+-->
