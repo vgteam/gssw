@@ -985,12 +985,12 @@ gssw_graph_mapping* gssw_graph_mapping_create(void) {
 void gssw_graph_mapping_destroy(gssw_graph_mapping* m) {
     //graph_cigar_destroy(&m->cigar);
     int32_t i;
+
     gssw_graph_cigar* g = &m->cigar;
     for (i = 0; i < g->length; ++i) {
         gssw_cigar_destroy(g->elements[i].cigar);
     }
     free(g->elements);
-    //free(g);
     free(m);
 }
 
@@ -1004,7 +1004,6 @@ void gssw_graph_cigar_destroy(gssw_graph_cigar* g) {
         gssw_cigar_destroy(g->elements[i].cigar);
     }
     free(g->elements);
-    free(g);
 }
 
 void gssw_print_graph_cigar(gssw_graph_cigar* g) {
