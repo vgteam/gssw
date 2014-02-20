@@ -85,7 +85,7 @@ struct gssw_profile{
 //typedef struct node s_node;
 typedef struct gssw_node gssw_node;
 typedef struct gssw_node {
-    char* name;
+    void* data;
     uint32_t id;
     char* seq; // sequence
     int8_t* num; // numerical conversion of seq
@@ -129,6 +129,7 @@ typedef struct {
 
 typedef struct {
     int32_t position; // position in first node
+    int16_t score;
     gssw_graph_cigar cigar;
 } gssw_graph_mapping;
 
@@ -272,6 +273,8 @@ void gssw_print_score_matrix (char* ref,
                               int32_t readLen,
                               gssw_align* alignment);
 
+void gssw_graph_print(gssw_graph* graph);
+
 /*! @function         Trace back alignment across score matrix stored in alignment structure
     @param alignment  Alignment structure.
     @param end        Alignment ending position.
@@ -345,7 +348,7 @@ void gssw_reverse_cigar(gssw_cigar* c);
 void gssw_print_cigar(gssw_cigar* c);
 void gssw_cigar_destroy(gssw_cigar* c);
 
-gssw_node* gssw_node_create(const char* name,
+gssw_node* gssw_node_create(void* data,
                             const uint32_t id,
                             const char* seq,
                             const int8_t* nt_table,

@@ -763,6 +763,21 @@ void gssw_print_score_matrix (char* ref, int32_t refLen, char* read, int32_t rea
 
 }
 
+void gssw_graph_print(gssw_graph* graph) {
+    uint32_t i = 0, gs = graph->size;
+    gssw_node** npp = graph->nodes;
+    fprintf(stdout, "digraph variants {\n");
+    for (i=0; i<gs; ++i, ++npp) {
+        gssw_node* n = *npp;
+        fprintf(stdout, "// node %u %u %s\n", n->id, n->len, n->seq);
+        uint32_t k;
+        for (k=0; k<n->count_prev; ++k) {
+            fprintf(stdout, "%u -> %u;\n", n->prev[k]->id, n->id);
+        }
+    }
+    fprintf(stdout, "}\n");
+}
+
 void gssw_graph_print_score_matrices(gssw_graph* graph, char* read, int32_t readLen) {
     uint32_t i = 0, gs = graph->size;
     gssw_node** npp = graph->nodes;
@@ -1004,7 +1019,7 @@ void gssw_print_graph_cigar(gssw_graph_cigar* g) {
 }
 
 void gssw_print_graph_mapping(gssw_graph_mapping* gm) {
-    fprintf(stdout, "%i:", gm->position);
+    fprintf(stdout, "%u@%i:", gm->score, gm->position);
     gssw_print_graph_cigar(&gm->cigar);
 }
 
@@ -1048,6 +1063,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         exit(1);
     }
     uint16_t score = n->alignment->score1;
+    gm->score = score;
     uint8_t score_is_byte = (score >= 255) ? 0 : 1;
     int32_t refEnd = n->alignment->ref_end1;
     int32_t readEnd = n->alignment->read_end1;
@@ -1219,20 +1235,18 @@ void gssw_seed_destroy(gssw_seed* s) {
     free(s);
 }
 
-gssw_node* gssw_node_create(const char* name,
+gssw_node* gssw_node_create(void* data,
                             const uint32_t id,
                             const char* seq,
                             const int8_t* nt_table,
                             const int8_t* score_matrix) {
     gssw_node* n = calloc(1, sizeof(gssw_node));
     int32_t len = strlen(seq);
-    int32_t namelen = strlen(name);
     n->id = id;
     n->len = len;
-    n->seq = (char*)malloc(len);
-    strncpy(n->seq, seq, len);
-    n->name = (char*)malloc(namelen);
-    strncpy(n->name, name, namelen);
+    n->seq = (char*)malloc(len+1);
+    strncpy(n->seq, seq, len); n->seq[len] = 0;
+    n->data = data;
     n->num = gssw_create_num(seq, len, nt_table);
     n->count_prev = 0; // are these be set == 0 by calloc?
     n->count_next = 0;
@@ -1253,7 +1267,6 @@ void gssw_profile_destroy(gssw_profile* prof) {
 }
 
 void gssw_node_destroy(gssw_node* n) {
-    free(n->name);
     free(n->seq);
     free(n->num);
     free(n->prev);
@@ -1279,12 +1292,21 @@ void gssw_node_add_next(gssw_node* n, gssw_node* m) {
 }
 
 void gssw_nodes_add_edge(gssw_node* n, gssw_node* m) {
+    fprintf(stderr, "connecting %u -> %u\n", n->id, m->id);
     gssw_node_add_next(n, m);
     gssw_node_add_prev(m, n);
 }
 
 gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t count) {
     int32_t j = 0, k = 0;
+    for (k = 0; k < count; ++k) {
+        if (!prev[k]->alignment) {
+            fprintf(stderr, "cannot align because node predecessors cannot provide seed\n");
+            fprintf(stderr, "failing is node %u\n", prev[k]->id);
+            exit(1);
+        }
+    }
+
     __m128i vZero = _mm_set1_epi32(0);
 	int32_t segLen = (readLen + 15) / 16;
     gssw_seed* seed = (gssw_seed*)calloc(1, sizeof(gssw_seed));
@@ -1360,6 +1382,7 @@ gssw_graph_fill (gssw_graph* graph,
     gssw_node** npp = &graph->nodes[0];
     for (i = 0; i < graph->size; ++i, ++npp) {
         gssw_node* n = *npp;
+        fprintf(stderr, "filling node %u %s\n", n->id, n->seq);
         // get seed from parents (max of multiple inputs)
         if (prof->profile_byte) {
             seed = gssw_create_seed_byte(prof->readLen, n->prev, n->count_prev);
@@ -1486,8 +1509,10 @@ int32_t gssw_graph_add_node(gssw_graph* graph, gssw_node* node) {
         }
     }
     */
+    if (graph->size % 1024 == 0) {
+        graph->nodes = realloc((void*)graph->nodes, graph->size + 1024 * sizeof(void*));
+    }
     ++graph->size;
-    graph->nodes = realloc((void*)graph->nodes, graph->size * sizeof(void*));
     graph->nodes[graph->size-1] = node;
     return graph->size;
 }
