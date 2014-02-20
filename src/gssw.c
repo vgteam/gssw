@@ -1267,7 +1267,6 @@ void gssw_profile_destroy(gssw_profile* prof) {
 }
 
 void gssw_node_destroy(gssw_node* n) {
-    free(n->data);
     free(n->seq);
     free(n->num);
     free(n->prev);
