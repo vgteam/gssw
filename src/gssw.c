@@ -1236,7 +1236,7 @@ void gssw_seed_destroy(gssw_seed* s) {
 
 gssw_node* gssw_node_create(void* data,
                             const uint32_t id,
-                            const char* seq,
+                            char* seq,
                             const int8_t* nt_table,
                             const int8_t* score_matrix) {
     gssw_node* n = calloc(1, sizeof(gssw_node));
@@ -1361,7 +1361,7 @@ gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t coun
 
 gssw_graph*
 gssw_graph_fill (gssw_graph* graph,
-                 const char* read_seq,
+                 char* read_seq,
                  const int8_t* nt_table,
                  const int8_t* score_matrix,
                  const uint8_t weight_gapO,
