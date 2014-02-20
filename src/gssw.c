@@ -782,7 +782,7 @@ void gssw_graph_print(gssw_graph* graph) {
     fprintf(stdout, "}\n");
 }
 
-void gssw_graph_print_score_matrices(gssw_graph* graph, char* read, int32_t readLen) {
+void gssw_graph_print_score_matrices(gssw_graph* graph, const char* read, int32_t readLen) {
     uint32_t i = 0, gs = graph->size;
     gssw_node** npp = graph->nodes;
     for (i=0; i<gs; ++i, ++npp) {

@@ -377,10 +377,13 @@ gssw_graph_fill (gssw_graph* graph,
                  const int8_t score_size);
 
 gssw_graph* gssw_graph_create(uint32_t size);
-int32_t gssw_graph_add_node(gssw_graph* graph, gssw_node* node);
+int32_t gssw_graph_add_node(gssw_graph* graph,
+                            gssw_node* node);
 void gssw_graph_clear(gssw_graph* graph);
 void gssw_graph_destroy(gssw_graph* graph);
-void gssw_graph_print_score_matrices(gssw_graph* graph, char* read, int32_t readLen);
+void gssw_graph_print_score_matrices(gssw_graph* graph,
+                                     const char* read,
+                                     int32_t readLen);
 
 gssw_graph_mapping* gssw_graph_mapping_create(void);
 void gssw_graph_mapping_destroy(gssw_graph_mapping* m);
