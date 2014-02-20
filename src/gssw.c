@@ -1493,6 +1493,10 @@ void gssw_graph_clear_alignment(gssw_graph* g) {
 }
 
 void gssw_graph_destroy(gssw_graph* g) {
+    uint32_t i;
+    for (i = 0; i < g->size; ++i) {
+        gssw_node_destroy(g->nodes[i]);
+    }
     g->max_node = NULL;
     free(g->nodes);
     g->nodes = NULL;

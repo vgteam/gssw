@@ -69,11 +69,8 @@ int main (int argc, char * const argv[]) {
 
     gssw_print_graph_mapping(gm);
     gssw_graph_mapping_destroy(gm);
+    // note that nodes which are referred to in this graph are destroyed as well
     gssw_graph_destroy(graph);
-    gssw_node_destroy(nodes[0]);
-    gssw_node_destroy(nodes[1]);
-    gssw_node_destroy(nodes[2]);
-    gssw_node_destroy(nodes[3]);
 
     free(nt_table);
 	free(mat);
