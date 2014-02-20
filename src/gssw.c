@@ -727,7 +727,11 @@ void gssw_align_clear_matrix_and_seed (gssw_align* a) {
     a->seed.pvE = NULL;
 }
 
-void gssw_print_score_matrix (char* ref, int32_t refLen, char* read, int32_t readLen, gssw_align* alignment) {
+void gssw_print_score_matrix (const char* ref,
+                              int32_t refLen,
+                              const char* read,
+                              int32_t readLen,
+                              gssw_align* alignment) {
 
     int32_t i, j;
 
@@ -800,9 +804,9 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        uint16_t* score,
                                        int32_t* refEnd,
                                        int32_t* readEnd,
-                                       char* ref,
+                                       const char* ref,
                                        int32_t refLen,
-                                       char* read,
+                                       const char* read,
                                        int32_t readLen,
                                        int32_t match,
                                        int32_t mismatch,
@@ -841,9 +845,9 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
-                                            char* ref,
+                                            const char* ref,
                                             int32_t refLen,
-                                            char* read,
+                                            const char* read,
                                             int32_t readLen,
                                             int32_t match,
                                             int32_t mismatch,
@@ -913,9 +917,9 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
-                                            char* ref,
+                                            const char* ref,
                                             int32_t refLen,
-                                            char* read,
+                                            const char* read,
                                             int32_t readLen,
                                             int32_t match,
                                             int32_t mismatch,
@@ -1042,7 +1046,7 @@ void gssw_reverse_graph_cigar(gssw_graph_cigar* c) {
 }
 
 gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
-                                           char* read,
+                                           const char* read,
                                            int32_t readLen,
                                            int32_t match,
                                            int32_t mismatch,
@@ -1236,7 +1240,7 @@ void gssw_seed_destroy(gssw_seed* s) {
 
 gssw_node* gssw_node_create(void* data,
                             const uint32_t id,
-                            char* seq,
+                            const char* seq,
                             const int8_t* nt_table,
                             const int8_t* score_matrix) {
     gssw_node* n = calloc(1, sizeof(gssw_node));
@@ -1361,7 +1365,7 @@ gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t coun
 
 gssw_graph*
 gssw_graph_fill (gssw_graph* graph,
-                 char* read_seq,
+                 const char* read_seq,
                  const int8_t* nt_table,
                  const int8_t* score_matrix,
                  const uint8_t weight_gapO,
