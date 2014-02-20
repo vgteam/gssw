@@ -1073,6 +1073,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
     gssw_node_cigar* nc = gc->elements;
 
+    fprintf(stderr, "tracing back, max node = %p %u\n", n, n->id);
     while (score > 0) {
         if (gc->length > 0 && gc->length == GRAPH_CIGAR_ALLOC_SIZE) {
             gc->elements = realloc((void*)gc->elements,
@@ -1092,6 +1093,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                                gap_extension);
         nc->node = n;
         ++gc->length;
+        fprintf(stderr, "score is %u as we end node %p %u\n", score, n, n->id);
         if (score == 0) {
             break;
         }
@@ -1124,6 +1126,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                 gssw_node* cn = n->prev[i];
                 l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
+                fprintf(stderr, "checking if %u or %u are greater than %u\n", l, d, max_score);
                 if (d > max_score) {
                     max_score = d;
                     max_prev = cn;
@@ -1156,16 +1159,22 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         // determine traceback direction
         // did the read complete here?
         // go to ending position, look at neighbors across all inbound nodes
-        n = max_prev;
-        // update ref end repeat
-        refEnd = n->len - 1;
-        if (max_diag) {
-            --readEnd;
-            gssw_add_element(nc->cigar, 'M', 1);
+        fprintf(stderr, "max_prev = %p, node = %p\n", max_prev, n);
+        if (max_prev) {
+            n = max_prev;
+            // update ref end repeat
+            refEnd = n->len - 1;
+            if (max_diag) {
+                --readEnd;
+                gssw_add_element(nc->cigar, 'M', 1);
+            } else {
+                gssw_add_element(nc->cigar, 'D', 1);
+            }
+            ++nc;
         } else {
-            gssw_add_element(nc->cigar, 'D', 1);
+            // we had score > 0, but did not cross node boundaries
+            break;
         }
-        ++nc;
 
     }
 
@@ -1274,7 +1283,9 @@ void gssw_node_destroy(gssw_node* n) {
     free(n->num);
     free(n->prev);
     free(n->next);
-    gssw_align_destroy(n->alignment);
+    if (n->alignment) {
+        gssw_align_destroy(n->alignment);
+    }
     free(n);
 }
 
