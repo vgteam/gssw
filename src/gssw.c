@@ -1043,9 +1043,6 @@ void gssw_reverse_graph_cigar(gssw_graph_cigar* c) {
     free(c->elements);
     c->elements = reversed->elements;
     free(reversed);
-    for (s = 0; s < c->length; ++s) {
-        gssw_reverse_cigar(c->elements[s].cigar);
-    }
 }
 
 gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
@@ -1075,10 +1072,13 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
     int32_t readEnd = n->alignment->read_end1;
 
     gssw_node_cigar* nc = gc->elements;
+    // TODO not handled correctly; due to memory allocation woes
+    /*
     if (readLen - readEnd) {
         nc->cigar = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
         gssw_add_element(nc->cigar, 'S', readLen-readEnd);
     }
+    */
 
     fprintf(stderr, "tracing back, max node = %p %u\n", n, n->id);
     while (score > 0) {
@@ -1180,7 +1180,8 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
             ++nc;
         } else {
             // TODO make a soft clip for the rest of the read
-            gssw_add_element(nc->cigar, 'S', readEnd);
+            //gssw_add_element(nc->cigar, 'S', readEnd);
+            // THIS SHOULD BE AT THE START
             // we had score > 0, but did not cross node boundaries
             break;
         }
