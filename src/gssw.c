@@ -1076,14 +1076,14 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
     int32_t end_soft_clip = 0;
     // TODO not handled correctly; due to memory allocation woes
     if (readLen - readEnd - 1) {
-        fprintf(stderr, "soft clip at end\n");
+        //fprintf(stderr, "soft clip at end\n");
         //nc->cigar = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
         //gssw_cigar_push_back(nc->cigar, 'S', readLen-readEnd);
         end_soft_clip = readLen-readEnd-1;
-        fprintf(stderr, "%i\n", end_soft_clip);
+        //fprintf(stderr, "%i\n", end_soft_clip);
     }
 
-    fprintf(stderr, "tracing back, max node = %p %u\n", n, n->id);
+    //fprintf(stderr, "tracing back, max node = %p %u\n", n, n->id);
     while (score > 0) {
         //++gc->length;
         if (gc->length == graph_cigar_bufsiz) {
@@ -1121,11 +1121,11 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         
         nc->node = n;
         ++gc->length;
-        fprintf(stderr, "score is %u as we end node %p %u\n", score, n, n->id);
+        //fprintf(stderr, "score is %u as we end node %p %u\n", score, n, n->id);
         if (score == 0) {
             if (readEnd > 0) {
                 //gssw_reverse_cigar(nc->cigar);
-                fprintf(stderr, "soft clip at beginning of %i bp\n", readEnd);
+                //fprintf(stderr, "soft clip at beginning of %i bp\n", readEnd);
                 gssw_cigar_push_front(nc->cigar, 'S', readEnd);
             }
             break;
@@ -1192,7 +1192,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         // determine traceback direction
         // did the read complete here?
         // go to ending position, look at neighbors across all inbound nodes
-        fprintf(stderr, "max_prev = %p, node = %p\n", max_prev, n);
+        //fprintf(stderr, "max_prev = %p, node = %p\n", max_prev, n);
         if (max_prev) {
             n = max_prev;
             // update ref end repeat
@@ -1211,7 +1211,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         } else {
             // TODO make a soft clip for the rest of the read
             //gssw_reverse_cigar(nc->cigar);
-            fprintf(stderr, "soft clip at beginning of %i bp\n", readEnd);
+            //fprintf(stderr, "soft clip at beginning of %i bp\n", readEnd);
             gssw_cigar_push_front(nc->cigar, 'S', readEnd);
             //gssw_reverse_cigar(nc->cigar);
             // THIS SHOULD BE AT THE START of the cigar
@@ -1222,7 +1222,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
     }
 
 
-    fprintf(stderr, "at end of traceback loop\n");
+    //fprintf(stderr, "at end of traceback loop\n");
     // 
     gssw_reverse_graph_cigar(gc);
 
@@ -1383,7 +1383,7 @@ void gssw_node_add_next(gssw_node* n, gssw_node* m) {
 }
 
 void gssw_nodes_add_edge(gssw_node* n, gssw_node* m) {
-    fprintf(stderr, "connecting %u -> %u\n", n->id, m->id);
+    //fprintf(stderr, "connecting %u -> %u\n", n->id, m->id);
     gssw_node_add_next(n, m);
     gssw_node_add_prev(m, n);
 }
@@ -1404,6 +1404,7 @@ gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t coun
     if (!(!posix_memalign((void**)&seed->pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&seed->pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
         fprintf(stderr, "Could not allocate memory for alignment seed\n"); exit(1);
+        exit(1);
     }
     memset(seed->pvE,      0, segLen*sizeof(__m128i));
     memset(seed->pvHStore, 0, segLen*sizeof(__m128i));
@@ -1431,6 +1432,7 @@ gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t coun
     if (!(!posix_memalign((void**)&seed->pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&seed->pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
         fprintf(stderr, "Could not allocate memory for alignment seed\n"); exit(1);
+        exit(1);
     }
     memset(seed->pvE,      0, segLen*sizeof(__m128i));
     memset(seed->pvHStore, 0, segLen*sizeof(__m128i));
