@@ -343,7 +343,8 @@ void gssw_seed_destroy(gssw_seed* seed);
 gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t count);
 gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t count);
 
-void gssw_add_element(gssw_cigar* c, char type, uint32_t length);
+void gssw_cigar_push_back(gssw_cigar* c, char type, uint32_t length);
+void gssw_cigar_push_front(gssw_cigar* c, char type, uint32_t length);
 void gssw_reverse_cigar(gssw_cigar* c);
 void gssw_print_cigar(gssw_cigar* c);
 void gssw_cigar_destroy(gssw_cigar* c);

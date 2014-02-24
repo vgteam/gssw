@@ -880,15 +880,15 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
         if (h == n &&
             ((d + match == h && ref[i] == read[j])
              || (d - mismatch == h && ref[i] != read[j]))) {
-            gssw_add_element(result, 'M', 1);
+            gssw_cigar_push_back(result, 'M', 1);
             h = d;
             --i; --j;
         } else if (l == n && (l - gap_open == h || l - gap_extension == h)) {
-            gssw_add_element(result, 'D', 1);
+            gssw_cigar_push_back(result, 'D', 1);
             h = l;
             --i;
         } else if (u == n && (u - gap_open == h || u - gap_extension == h)) {
-            gssw_add_element(result, 'I', 1);
+            gssw_cigar_push_back(result, 'I', 1);
             h = u;
             --j;
         } else {
@@ -952,15 +952,15 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
         if (h == n &&
             ((d + match == h && ref[i] == read[j])
              || (d - mismatch == h && ref[i] != read[j]))) {
-            gssw_add_element(result, 'M', 1);
+            gssw_cigar_push_back(result, 'M', 1);
             h = d;
             --i; --j;
         } else if (l == n && (l - gap_open == h || l - gap_extension == h)) {
-            gssw_add_element(result, 'D', 1);
+            gssw_cigar_push_back(result, 'D', 1);
             h = l;
             --i;
         } else if (u == n && (u - gap_open == h || u - gap_extension == h)) {
-            gssw_add_element(result, 'I', 1);
+            gssw_cigar_push_back(result, 'I', 1);
             h = u;
             --j;
         } else {
@@ -1073,13 +1073,15 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
     // node cigar
     gssw_node_cigar* nc = gc->elements;
+    int32_t end_soft_clip = 0;
     // TODO not handled correctly; due to memory allocation woes
-    /*
-    if (readLen - readEnd) {
-        nc->cigar = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
-        gssw_add_element(nc->cigar, 'S', readLen-readEnd);
+    if (readLen - readEnd - 1) {
+        fprintf(stderr, "soft clip at end\n");
+        //nc->cigar = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
+        //gssw_cigar_push_back(nc->cigar, 'S', readLen-readEnd);
+        end_soft_clip = readLen-readEnd-1;
+        fprintf(stderr, "%i\n", end_soft_clip);
     }
-    */
 
     fprintf(stderr, "tracing back, max node = %p %u\n", n, n->id);
     while (score > 0) {
@@ -1111,10 +1113,21 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                                mismatch,
                                                gap_open,
                                                gap_extension);
+
+        if (end_soft_clip) {
+            gssw_cigar_push_back(nc->cigar, 'S', end_soft_clip);
+            end_soft_clip = 0;
+        }
+        
         nc->node = n;
         ++gc->length;
         fprintf(stderr, "score is %u as we end node %p %u\n", score, n, n->id);
         if (score == 0) {
+            if (readEnd > 0) {
+                //gssw_reverse_cigar(nc->cigar);
+                fprintf(stderr, "soft clip at beginning of %i bp\n", readEnd);
+                gssw_cigar_push_front(nc->cigar, 'S', readEnd);
+            }
             break;
         }
         // the read did not complete here
@@ -1179,22 +1192,29 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         // determine traceback direction
         // did the read complete here?
         // go to ending position, look at neighbors across all inbound nodes
-        //fprintf(stderr, "max_prev = %p, node = %p\n", max_prev, n);
+        fprintf(stderr, "max_prev = %p, node = %p\n", max_prev, n);
         if (max_prev) {
             n = max_prev;
             // update ref end repeat
             refEnd = n->len - 1;
             if (max_diag) {
                 --readEnd;
-                gssw_add_element(nc->cigar, 'M', 1);
+                //gssw_reverse_cigar(nc->cigar);
+                gssw_cigar_push_front(nc->cigar, 'M', 1);
+                //gssw_reverse_cigar(nc->cigar);
             } else {
-                gssw_add_element(nc->cigar, 'D', 1);
+                //gssw_reverse_cigar(nc->cigar);
+                gssw_cigar_push_front(nc->cigar, 'D', 1);
+                //gssw_reverse_cigar(nc->cigar);
             }
             ++nc;
         } else {
             // TODO make a soft clip for the rest of the read
-            //gssw_add_element(nc->cigar, 'S', readEnd);
-            // THIS SHOULD BE AT THE START
+            //gssw_reverse_cigar(nc->cigar);
+            fprintf(stderr, "soft clip at beginning of %i bp\n", readEnd);
+            gssw_cigar_push_front(nc->cigar, 'S', readEnd);
+            //gssw_reverse_cigar(nc->cigar);
+            // THIS SHOULD BE AT THE START of the cigar
             // we had score > 0, but did not cross node boundaries
             break;
         }
@@ -1212,12 +1232,12 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
 }
 
-void gssw_add_element(gssw_cigar* c, char type, uint32_t length) {
+void gssw_cigar_push_back(gssw_cigar* c, char type, uint32_t length) {
     if (c->length == 0) {
         c->length = 1;
         c->elements = (gssw_cigar_element*) malloc(c->length * sizeof(gssw_cigar_element));
-        c->elements[c->length - 1].type = type;
-        c->elements[c->length - 1].length = length;
+        c->elements[0].type = type;
+        c->elements[0].length = length;
     } else if (type != c->elements[c->length - 1].type) {
         c->length++;
         // change to not realloc every single freakin time
@@ -1228,6 +1248,37 @@ void gssw_add_element(gssw_cigar* c, char type, uint32_t length) {
     } else {
         c->elements[c->length - 1].length += length;
     }
+}
+
+void gssw_cigar_push_front(gssw_cigar* c, char type, uint32_t length) {
+    gssw_reverse_cigar(c);
+    gssw_cigar_push_back(c, type, length);
+    gssw_reverse_cigar(c);
+    /*
+    if (c->length == 0) {
+        c->length = 1;
+        c->elements = (gssw_cigar_element*) malloc(c->length * sizeof(gssw_cigar_element));
+        c->elements[0].type = type;
+        c->elements[0].length = length;
+    } else if (type != c->elements[0].type) {
+        c->length++;
+        // change to not realloc every single freakin time
+        // but e.g. on doubling
+        c->elements = (gssw_cigar_element*) realloc(c->elements, c->length * sizeof(gssw_cigar_element));
+        //gssw_cigar_element* new = (gssw_cigar_element*) malloc(c->length * sizeof(gssw_cigar_element));
+        //(gssw_cigar_element*) memcpy(new + sizeof(gssw_cigar_element), c->elements, c->length-1 * sizeof(gssw_cigar_element));
+        //free(c->elements);
+        int32_t i;
+        for (i = c->length-1; i > 1; --i) {
+            c->elements[i].type = c->elements[i-1].type;
+            c->elements[i].length = c->elements[i-1].length;
+        }
+        c->elements[0].type = type;
+        c->elements[0].length = length;
+    } else {
+        c->elements[0].length += length;
+    }
+    */
 }
 
 void gssw_reverse_cigar(gssw_cigar* c) {
