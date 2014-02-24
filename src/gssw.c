@@ -770,16 +770,16 @@ void gssw_print_score_matrix (const char* ref,
 void gssw_graph_print(gssw_graph* graph) {
     uint32_t i = 0, gs = graph->size;
     gssw_node** npp = graph->nodes;
-    fprintf(stdout, "digraph variants {\n");
+    fprintf(stdout, "GRAPH digraph variants {\n");
     for (i=0; i<gs; ++i, ++npp) {
         gssw_node* n = *npp;
-        fprintf(stdout, "// node %u %u %s\n", n->id, n->len, n->seq);
+        fprintf(stdout, "GRAPH // node %u %u %s\n", n->id, n->len, n->seq);
         uint32_t k;
         for (k=0; k<n->count_prev; ++k) {
-            fprintf(stdout, "%u -> %u;\n", n->prev[k]->id, n->id);
+            fprintf(stdout, "GRAPH %u -> %u;\n", n->prev[k]->id, n->id);
         }
     }
-    fprintf(stdout, "}\n");
+    fprintf(stdout, "GRAPH }\n");
 }
 
 void gssw_graph_print_score_matrices(gssw_graph* graph, const char* read, int32_t readLen) {
@@ -987,9 +987,7 @@ gssw_graph_mapping* gssw_graph_mapping_create(void) {
 }
 
 void gssw_graph_mapping_destroy(gssw_graph_mapping* m) {
-    //graph_cigar_destroy(&m->cigar);
     int32_t i;
-
     gssw_graph_cigar* g = &m->cigar;
     for (i = 0; i < g->length; ++i) {
         gssw_cigar_destroy(g->elements[i].cigar);
@@ -1055,8 +1053,10 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
     gssw_graph_mapping* gm = gssw_graph_mapping_create();
     gssw_graph_cigar* gc = &gm->cigar;
-    uint32_t GRAPH_CIGAR_ALLOC_SIZE = 10;
-    gc->elements = calloc(1, GRAPH_CIGAR_ALLOC_SIZE*sizeof(gssw_node_cigar));
+    //uint32_t GRAPH_CIGAR_ALLOC_SIZE = 2;//graph->size; // horrible hack... hack hack hack
+    uint32_t graph_cigar_bufsiz = 16;
+    gc->elements = NULL;//(gssw_node_cigar*) calloc(20, sizeof(gssw_node_cigar));
+    gc->elements = realloc((void*) gc->elements, graph_cigar_bufsiz * sizeof(gssw_node_cigar));
     gc->length = 0;
 
     gssw_node* n = graph->max_node;
@@ -1071,6 +1071,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
     int32_t refEnd = n->alignment->ref_end1;
     int32_t readEnd = n->alignment->read_end1;
 
+    // node cigar
     gssw_node_cigar* nc = gc->elements;
     // TODO not handled correctly; due to memory allocation woes
     /*
@@ -1082,10 +1083,22 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
     fprintf(stderr, "tracing back, max node = %p %u\n", n, n->id);
     while (score > 0) {
-        if (gc->length > 0 && gc->length == GRAPH_CIGAR_ALLOC_SIZE) {
-            gc->elements = realloc((void*)gc->elements,
-                                   gc->length + GRAPH_CIGAR_ALLOC_SIZE*sizeof(gssw_node_cigar));
+        //++gc->length;
+        if (gc->length == graph_cigar_bufsiz) {
+            graph_cigar_bufsiz *= 2;
+            gc->elements = realloc((void*) gc->elements, graph_cigar_bufsiz * sizeof(gssw_node_cigar));
         }
+        //             gc->elements = realloc((void*) gc->elements, (gc->length + 1) * sizeof(gssw_node_cigar));
+
+        /*
+        if (gc->length > 0 && gc->length % GRAPH_CIGAR_ALLOC_SIZE == 0) {
+            //graph->nodes = realloc((void*)graph->nodes, graph->size + 1024 * sizeof(void*));
+            gc->elements = realloc((void*)gc->elements,
+                                   gc->length + GRAPH_CIGAR_ALLOC_SIZE * sizeof(gssw_node_cigar));
+            nc = &gc->elements[gc->length];
+        }
+        */
+        nc = gc->elements + gc->length;
         nc->cigar = gssw_alignment_trace_back (n->alignment,
                                                &score,
                                                &refEnd,
@@ -1133,7 +1146,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                 gssw_node* cn = n->prev[i];
                 l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-                fprintf(stderr, "checking if %u or %u are greater than %u\n", l, d, max_score);
+                //fprintf(stderr, "checking if %u or %u are greater than %u\n", l, d, max_score);
                 if (d > max_score) {
                     max_score = d;
                     max_prev = cn;
@@ -1166,7 +1179,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         // determine traceback direction
         // did the read complete here?
         // go to ending position, look at neighbors across all inbound nodes
-        fprintf(stderr, "max_prev = %p, node = %p\n", max_prev, n);
+        //fprintf(stderr, "max_prev = %p, node = %p\n", max_prev, n);
         if (max_prev) {
             n = max_prev;
             // update ref end repeat
@@ -1188,6 +1201,8 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
     }
 
+
+    fprintf(stderr, "at end of traceback loop\n");
     // 
     gssw_reverse_graph_cigar(gc);
 
@@ -1216,6 +1231,7 @@ void gssw_add_element(gssw_cigar* c, char type, uint32_t length) {
 }
 
 void gssw_reverse_cigar(gssw_cigar* c) {
+    if (!c->length) return; // bail out
 	gssw_cigar* reversed = (gssw_cigar*)malloc(sizeof(gssw_cigar));
     reversed->length = c->length;
 	reversed->elements = (gssw_cigar_element*) malloc(c->length * sizeof(gssw_cigar_element));
