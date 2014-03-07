@@ -45,9 +45,10 @@ int main (int argc, char * const argv[]) {
 
     // makes a diamond
     gssw_nodes_add_edge(nodes[0], nodes[1]);
-    //nodes_add_edge(nodes[1], nodes[3]);
     gssw_nodes_add_edge(nodes[0], nodes[2]);
-    gssw_nodes_add_edge(nodes[1], nodes[2]);
+    gssw_nodes_add_edge(nodes[1], nodes[3]);
+    gssw_nodes_add_edge(nodes[2], nodes[3]);
+
 
     gssw_graph* graph = gssw_graph_create(4);
     //memcpy((void*)graph->nodes, (void*)nodes, 4*sizeof(gssw_node*));

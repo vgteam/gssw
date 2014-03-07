@@ -392,6 +392,8 @@ gssw_graph_cigar* gssw_graph_cigar_create(void);
 void gssw_graph_cigar_destroy(gssw_graph_cigar* g);
 void gssw_print_graph_cigar(gssw_graph_cigar* g);
 void gssw_print_graph_mapping(gssw_graph_mapping* gm);
+//void gssw_graph_cigar_to_string(gssw_graph_cigar* g);
+//void gssw_graph_mapping_to_string(gssw_graph_mapping* gm);
 
 // some utility functions
 int8_t* gssw_create_score_matrix(int32_t match, int32_t mismatch);

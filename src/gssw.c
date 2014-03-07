@@ -874,9 +874,13 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
         if (j > 0) {
             u = mH[readLen*i + (j-1)];
         }
+
         // get the max of the three directions
         int32_t n = (l > u ? l : u);
         n = (h > n ? h : n);
+        //fprintf(stderr, "(%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
+
+        // if we match 
         if (h == n &&
             ((d + match == h && ref[i] == read[j])
              || (d - mismatch == h && ref[i] != read[j]))) {
@@ -892,12 +896,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
             h = u;
             --j;
         } else {
-            // this is not an error if we are tracing back across a graph
             break;
-            fprintf(stderr, "traceback error\n");
-            fprintf(stderr, "h=%i i=%i j=%i\n", h, i, j);
-            fprintf(stderr, "d=%i, u=%i, l=%i\n", d, u, l);
-            h = d; --i; --j;
         }
     }
 
@@ -964,12 +963,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
             h = u;
             --j;
         } else {
-            // this is not an error if we are tracing back across a graph
             break;
-            fprintf(stderr, "traceback error\n");
-            fprintf(stderr, "h=%i i=%i j=%i\n", h, i, j);
-            fprintf(stderr, "d=%i, u=%i, l=%i\n", d, u, l);
-            h = d; --i; --j;
         }
     }
 
@@ -1023,6 +1017,30 @@ void gssw_print_graph_mapping(gssw_graph_mapping* gm) {
     fprintf(stdout, "%u@%i:", gm->score, gm->position);
     gssw_print_graph_cigar(&gm->cigar);
 }
+
+/*
+char* gssw_graph_cigar_to_string(gssw_graph_cigar* g) {
+    int32_t bufsiz = g->length * 1024;
+    char* s = calloc(bufsiz, sizeof(char));
+    int32_t i;
+    int32_t c = 0;
+    gssw_node_cigar* nc = g->elements;
+    for (i = 0; i < g->length; ++i, ++nc) {
+        c = snprintf(s+c, bufsiz-c, "%u[", nc->node->id);
+        int j;
+        int l = c->length;
+        gssw_cigar_element* e = c->elements;
+        for (j=0; LIKELY(j < l); ++j, ++e) {
+            c = snprintf(s+c, bufsiz-c, "%i%c", e->length, e->type);
+        }
+        c = snprintf(s+c, bufsiz-c, "]");
+    }
+    return s;
+}
+
+char* gssw_graph_mapping_to_string(gssw_graph_mapping* gm) {
+}
+*/
 
 void gssw_reverse_graph_cigar(gssw_graph_cigar* c) {
 	gssw_graph_cigar* reversed = (gssw_graph_cigar*)malloc(sizeof(gssw_graph_cigar));
@@ -1121,12 +1139,10 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         
         nc->node = n;
         ++gc->length;
-        //fprintf(stderr, "score is %u as we end node %p %u\n", score, n, n->id);
-        if (score == 0) {
-            if (readEnd > 0) {
-                //gssw_reverse_cigar(nc->cigar);
-                //fprintf(stderr, "soft clip at beginning of %i bp\n", readEnd);
-                gssw_cigar_push_front(nc->cigar, 'S', readEnd);
+        //fprintf(stderr, "score is %u as we end node %p %u at position %i in read and %i in ref\n", score, n, n->id, readEnd, refEnd);
+        if (score == 0 || refEnd > 0) {
+            if (readEnd > -1) {
+                gssw_cigar_push_front(nc->cigar, 'S', readEnd+1);
             }
             break;
         }
@@ -1159,7 +1175,6 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                 gssw_node* cn = n->prev[i];
                 l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-                //fprintf(stderr, "checking if %u or %u are greater than %u\n", l, d, max_score);
                 if (d > max_score) {
                     max_score = d;
                     max_prev = cn;
@@ -1199,34 +1214,23 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
             refEnd = n->len - 1;
             if (max_diag) {
                 --readEnd;
-                //gssw_reverse_cigar(nc->cigar);
                 gssw_cigar_push_front(nc->cigar, 'M', 1);
-                //gssw_reverse_cigar(nc->cigar);
             } else {
-                //gssw_reverse_cigar(nc->cigar);
                 gssw_cigar_push_front(nc->cigar, 'D', 1);
-                //gssw_reverse_cigar(nc->cigar);
             }
             ++nc;
         } else {
-            // TODO make a soft clip for the rest of the read
-            //gssw_reverse_cigar(nc->cigar);
-            //fprintf(stderr, "soft clip at beginning of %i bp\n", readEnd);
             gssw_cigar_push_front(nc->cigar, 'S', readEnd);
-            //gssw_reverse_cigar(nc->cigar);
-            // THIS SHOULD BE AT THE START of the cigar
-            // we had score > 0, but did not cross node boundaries
             break;
         }
 
     }
 
-
     //fprintf(stderr, "at end of traceback loop\n");
     // 
     gssw_reverse_graph_cigar(gc);
 
-    gm->position = refEnd + 1;
+    gm->position = (refEnd < 0 ? 0 : refEnd);
 
     return gm;
 
@@ -1495,7 +1499,7 @@ gssw_graph_fill (gssw_graph* graph,
             gssw_profile_destroy(prof);
             return gssw_graph_fill(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE, maskLen, 1);
         } else {
-            if (!graph->max_node || n->alignment->score1 > max_score) {
+            if (!graph->max_node || n->alignment->score1 >= max_score) {
                 graph->max_node = n;
                 max_score = n->alignment->score1;
             }
