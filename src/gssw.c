@@ -776,7 +776,8 @@ void gssw_graph_print(gssw_graph* graph) {
         fprintf(stdout, "GRAPH // node %u %u %s\n", n->id, n->len, n->seq);
         uint32_t k;
         for (k=0; k<n->count_prev; ++k) {
-            fprintf(stdout, "GRAPH %u -> %u;\n", n->prev[k]->id, n->id);
+            //fprintf(stdout, "GRAPH %u -> %u;\n", n->prev[k]->id, n->id);
+            fprintf(stdout, "GRAPH \"%u %s\" -> \"%u %s\";\n", n->prev[k]->id, n->prev[k]->seq, n->id, n->seq);
         }
     }
     fprintf(stdout, "GRAPH }\n");
@@ -1405,6 +1406,59 @@ void gssw_nodes_add_edge(gssw_node* n, gssw_node* m) {
     //fprintf(stderr, "connecting %u -> %u\n", n->id, m->id);
     gssw_node_add_next(n, m);
     gssw_node_add_prev(m, n);
+}
+
+void gssw_node_del_prev(gssw_node* n, gssw_node* m) {
+    gssw_node** x = (gssw_node**)malloc(n->count_prev*sizeof(gssw_node*));
+    int i = 0;
+    gssw_node** np = n->prev;
+    for ( ; i < n->count_prev; ++i, ++np) {
+        if (*np != m) {
+            x[i] = *np;
+        }
+    }
+    free(n->prev);
+    n->prev = x;
+    --n->count_prev;
+}
+
+void gssw_node_del_next(gssw_node* n, gssw_node* m) {
+    gssw_node** x = (gssw_node**)malloc(n->count_next*sizeof(gssw_node*));
+    int i = 0;
+    gssw_node** nn = n->next;
+    for ( ; i < n->count_next; ++i, ++nn) {
+        if (*nn != m) {
+            x[i] = *nn;
+        }
+    }
+    free(n->next);
+    n->next = x;
+    --n->count_next;
+}
+
+void gssw_nodes_del_edge(gssw_node* n, gssw_node* m) {
+    gssw_node_del_next(n, m);
+    gssw_node_del_prev(m, n);
+}
+
+void gssw_node_replace_prev(gssw_node* n, gssw_node* m, gssw_node* p) {
+    int i = 0;
+    gssw_node** np = n->prev;
+    for ( ; i < n->count_prev; ++i, ++np) {
+        if (*np == m) {
+            *np = p;
+        }
+    }
+}
+
+void gssw_node_replace_next(gssw_node* n, gssw_node* m, gssw_node* p) {
+    int i = 0;
+    gssw_node** nn = n->next;
+    for ( ; i < n->count_next; ++i, ++nn) {
+        if (*nn == m) {
+            *nn = p;
+        }
+    }
 }
 
 gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t count) {

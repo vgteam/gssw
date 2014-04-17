@@ -358,6 +358,12 @@ void gssw_node_destroy(gssw_node* n);
 void gssw_node_add_prev(gssw_node* n, gssw_node* m);
 void gssw_node_add_next(gssw_node* n, gssw_node* m);
 void gssw_nodes_add_edge(gssw_node* n, gssw_node* m);
+void gssw_node_del_prev(gssw_node* n, gssw_node* m);
+void gssw_node_del_next(gssw_node* n, gssw_node* m);
+void gssw_nodes_del_edge(gssw_node* n, gssw_node* m);
+void gssw_node_replace_prev(gssw_node* n, gssw_node* m, gssw_node* p);
+void gssw_node_replace_next(gssw_node* n, gssw_node* m, gssw_node* p);
+
 
 gssw_node*
 gssw_node_fill (gssw_node* node,
