@@ -783,6 +783,22 @@ void gssw_graph_print(gssw_graph* graph) {
     fprintf(stdout, "GRAPH }\n");
 }
 
+void gssw_graph_print_stderr(gssw_graph* graph) {
+    uint32_t i = 0, gs = graph->size;
+    gssw_node** npp = graph->nodes;
+    fprintf(stderr, "GRAPH digraph variants {\n");
+    for (i=0; i<gs; ++i, ++npp) {
+        gssw_node* n = *npp;
+        fprintf(stderr, "GRAPH // node %u %u %s\n", n->id, n->len, n->seq);
+        uint32_t k;
+        for (k=0; k<n->count_prev; ++k) {
+            //fprintf(stdout, "GRAPH %u -> %u;\n", n->prev[k]->id, n->id);
+            fprintf(stderr, "GRAPH \"%u %s\" -> \"%u %s\";\n", n->prev[k]->id, n->prev[k]->seq, n->id, n->seq);
+        }
+    }
+    fprintf(stderr, "GRAPH }\n");
+}
+
 void gssw_graph_print_score_matrices(gssw_graph* graph, const char* read, int32_t readLen) {
     uint32_t i = 0, gs = graph->size;
     gssw_node** npp = graph->nodes;
@@ -1404,6 +1420,14 @@ void gssw_node_add_next(gssw_node* n, gssw_node* m) {
 
 void gssw_nodes_add_edge(gssw_node* n, gssw_node* m) {
     //fprintf(stderr, "connecting %u -> %u\n", n->id, m->id);
+    // check that there isn't already an edge
+    uint32_t k;
+    // check to see if there is an edge from n -> m, and exit if so
+    for (k=0; k<n->count_next; ++k) {
+        if (n->next[k] == m) {
+            return;
+        }
+    }
     gssw_node_add_next(n, m);
     gssw_node_add_prev(m, n);
 }

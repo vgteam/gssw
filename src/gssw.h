@@ -274,6 +274,7 @@ void gssw_print_score_matrix (const char* ref,
                               gssw_align* alignment);
 
 void gssw_graph_print(gssw_graph* graph);
+void gssw_graph_print_stderr(gssw_graph* graph);
 
 /*! @function         Trace back alignment across score matrix stored in alignment structure
     @param alignment  Alignment structure.
