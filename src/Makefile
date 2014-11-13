@@ -1,5 +1,5 @@
 CC=			gcc
-CFLAGS=-Wall -O3 -msse2 -g #-pg 
+CFLAGS=-Wall -O3 -msse2 # -g #-pg 
 LOBJS=		gssw.o	
 PROG=		gssw_example
 all:$(PROG)
