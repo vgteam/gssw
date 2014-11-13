@@ -10,8 +10,10 @@ all:$(PROG)
 gssw_example:$(LOBJS) example.c
 	$(CC) $(CFLAGS) example.c -o $@ $(LOBJS) -lm -lz
 gssw.o:gssw.h
+libgssw.a:gssw.o
+	ar rvs libgssw.a gssw.o
 cleanlocal:
-		rm -fr *.o $(PROG) *~ 
+		rm -fr *.o $(PROG) *~ libgssw.a
 
 clean:cleanlocal
 
