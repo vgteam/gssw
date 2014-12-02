@@ -152,7 +152,7 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
           !posix_memalign((void**)&alignment->seed.pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&alignment->seed.pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&mH,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)))) {
-        fprintf(stderr, "Could not allocate memory required for alignment buffers.\n");
+        fprintf(stderr, "error:[gssw] Could not allocate memory required for alignment buffers.\n");
         exit(1);
     }
 
@@ -438,7 +438,7 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
           !posix_memalign((void**)&alignment->seed.pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&alignment->seed.pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&mH,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)))) {
-        fprintf(stderr, "Could not allocate memory required for alignment buffers.\n");
+        fprintf(stderr, "error:[gssw] Could not allocate memory required for alignment buffers.\n");
         exit(1);
     }
 
@@ -1099,8 +1099,8 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
     gssw_node* n = graph->max_node;
     if (!n) {
-        fprintf(stderr, "Cannot trace back because graph alignment has not been run.\n");
-        fprintf(stderr, "You must call graph_fill(...) before tracing back.\n");
+        fprintf(stderr, "error:[gssw] Cannot trace back because graph alignment has not been run.\n");
+        fprintf(stderr, "error:[gssw] You must call graph_fill(...) before tracing back.\n");
         exit(1);
     }
     uint16_t score = n->alignment->score1;
@@ -1500,7 +1500,7 @@ gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t coun
     gssw_seed* seed = (gssw_seed*)calloc(1, sizeof(gssw_seed));
     if (!(!posix_memalign((void**)&seed->pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&seed->pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
-        fprintf(stderr, "Could not allocate memory for alignment seed\n"); exit(1);
+        fprintf(stderr, "error:[gssw] Could not allocate memory for alignment seed\n"); exit(1);
         exit(1);
     }
     memset(seed->pvE,      0, segLen*sizeof(__m128i));
@@ -1528,7 +1528,7 @@ gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t coun
     gssw_seed* seed = (gssw_seed*)calloc(1, sizeof(gssw_seed));
     if (!(!posix_memalign((void**)&seed->pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&seed->pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
-        fprintf(stderr, "Could not allocate memory for alignment seed\n"); exit(1);
+        fprintf(stderr, "error:[gssw] Could not allocate memory for alignment seed\n"); exit(1);
         exit(1);
     }
     memset(seed->pvE,      0, segLen*sizeof(__m128i));
@@ -1673,7 +1673,7 @@ gssw_node_fill (gssw_node* node,
 gssw_graph* gssw_graph_create(uint32_t size) {
     gssw_graph* g = calloc(1, sizeof(gssw_graph));
     g->nodes = malloc(size*sizeof(gssw_node*));
-    if (!g || !g->nodes) { fprintf(stderr, "Could not allocate memory for graph of %u nodes.\n", size); exit(1); }
+    if (!g || !g->nodes) { fprintf(stderr, "error:[gssw] Could not allocate memory for graph of %u nodes.\n", size); exit(1); }
     return g;
 }
 
@@ -1693,17 +1693,12 @@ void gssw_graph_destroy(gssw_graph* g) {
 }
 
 int32_t gssw_graph_add_node(gssw_graph* graph, gssw_node* node) {
-    /*
-    const int32_t graph_realloc_size = 1024;
-    if (graph->size % graph_realloc_size == 0) {
-        graph->size += graph_realloc_size;
-        if (UNLIKELY(!(graph->nodes = realloc((void*)graph->nodes, graph->size * sizeof(void*))))) {
-            fprintf(stderr, "could not allocate memory for graph\n"); exit(1);
+    if (UNLIKELY(graph->size % 1024 == 0)) {
+        size_t old_size = graph->size * sizeof(void*);
+        size_t increment = 1024 * sizeof(void*);
+        if (UNLIKELY(!(graph->nodes = realloc((void*)graph->nodes, old_size + increment)))) {
+            fprintf(stderr, "error:[gssw] could not allocate memory for graph\n"); exit(1);
         }
-    }
-    */
-    if (graph->size % 1024 == 0) {
-        graph->nodes = realloc((void*)graph->nodes, graph->size + 1024 * sizeof(void*));
     }
     ++graph->size;
     graph->nodes[graph->size-1] = node;
