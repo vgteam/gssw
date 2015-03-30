@@ -731,39 +731,40 @@ void gssw_print_score_matrix (const char* ref,
                               int32_t refLen,
                               const char* read,
                               int32_t readLen,
-                              gssw_align* alignment) {
+                              gssw_align* alignment,
+                              FILE* out) {
 
     int32_t i, j;
 
-    fprintf(stdout, "\t");
+    fprintf(out, "\t");
     for (i = 0; LIKELY(i < refLen); ++i) {
-        fprintf(stdout, "%c\t\t", ref[i]);
+        fprintf(out, "%c\t\t", ref[i]);
     }
-    fprintf(stdout, "\n");
+    fprintf(out, "\n");
 
     if (gssw_is_byte(alignment)) {
         uint8_t* mH = alignment->mH;
         for (j = 0; LIKELY(j < readLen); ++j) {
-            fprintf(stdout, "%c\t", read[j]);
+            fprintf(out, "%c\t", read[j]);
             for (i = 0; LIKELY(i < refLen); ++i) {
-                fprintf(stdout, "(%u, %u) %u\t", i, j,
+                fprintf(out, "(%u, %u) %u\t", i, j,
                         ((uint8_t*)mH)[i*readLen + j]);
             }
-            fprintf(stdout, "\n");
+            fprintf(out, "\n");
         }
     } else {
         uint16_t* mH = alignment->mH;
         for (j = 0; LIKELY(j < readLen); ++j) {
-            fprintf(stdout, "%c\t", read[j]);
+            fprintf(out, "%c\t", read[j]);
             for (i = 0; LIKELY(i < refLen); ++i) {
-                fprintf(stdout, "(%u, %u) %u\t", i, j,
+                fprintf(out, "(%u, %u) %u\t", i, j,
                         ((uint16_t*)mH)[i*readLen + j]);
             }
-            fprintf(stdout, "\n");
+            fprintf(out, "\n");
         }
     }
 
-    fprintf(stdout, "\n");
+    fprintf(out, "\n");
 
 }
 
@@ -799,13 +800,13 @@ void gssw_graph_print_stderr(gssw_graph* graph) {
     fprintf(stderr, "GRAPH }\n");
 }
 
-void gssw_graph_print_score_matrices(gssw_graph* graph, const char* read, int32_t readLen) {
+void gssw_graph_print_score_matrices(gssw_graph* graph, const char* read, int32_t readLen, FILE* out) {
     uint32_t i = 0, gs = graph->size;
     gssw_node** npp = graph->nodes;
     for (i=0; i<gs; ++i, ++npp) {
         gssw_node* n = *npp;
-        fprintf(stdout, "node %u\n", n->id);
-        gssw_print_score_matrix(n->seq, n->len, read, readLen, n->alignment);
+        fprintf(out, "node %u\n", n->id);
+        gssw_print_score_matrix(n->seq, n->len, read, readLen, n->alignment, out);
     }
 }
 
@@ -1105,9 +1106,10 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
     }
     uint16_t score = n->alignment->score1;
     gm->score = score;
-    uint8_t score_is_byte = (score >= 255) ? 0 : 1;
+    uint8_t score_is_byte = gssw_is_byte(n->alignment);
     int32_t refEnd = n->alignment->ref_end1;
     int32_t readEnd = n->alignment->read_end1;
+    //fprintf(stderr, "ref_end1 %i read_end1 %i\n", refEnd, readEnd);
 
     // node cigar
     gssw_node_cigar* nc = gc->elements;
@@ -1162,6 +1164,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         //fprintf(stderr, "score is %u as we end node %p %u at position %i in read and %i in ref\n", score, n, n->id, readEnd, refEnd);
         if (score == 0 || refEnd > 0) {
             if (readEnd > -1) {
+                //fprintf(stderr, "soft clipping %i\n", readEnd+1);
                 gssw_cigar_push_front(nc->cigar, 'S', readEnd+1);
             }
             break;
@@ -1195,12 +1198,13 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
                 l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-
-                //char t = cn->seq[cn->len-1];
-                //char q_d = read[readEnd-1];
-                //char q_l = read[readEnd];
-                //fprintf(stderr, "t=%c q_d=%c q_l=%c d=%i l=%i max_score=%i\n",
-                //        t, q_d, q_l, d, l, max_score);
+                /*
+                char t = cn->seq[cn->len-1];
+                char q_d = read[readEnd-1];
+                char q_l = read[readEnd];
+                fprintf(stderr, "t=%c q_d=%c q_l=%c d=%i l=%i max_score=%i id=%i\n",
+                        t, q_d, q_l, d, l, max_score, cn->id);
+                */
                 // we need to check if we have a match and a gap which are both possible 
                 // under the scores and the relationship between the query and target strings
                 // if both are possible, we should prefer the match
@@ -1262,7 +1266,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
     // 
     gssw_reverse_graph_cigar(gc);
 
-    gm->position = (refEnd + 1 < 0 ? 0 : refEnd + 1); // drop last step by -1 on ref position
+    gm->position = (refEnd +1 < 0 ? 0 : refEnd +1); // drop last step by -1 on ref position
 
     return gm;
 

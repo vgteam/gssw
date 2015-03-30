@@ -271,7 +271,8 @@ void gssw_print_score_matrix (const char* ref,
                               int32_t refLen,
                               const char* read,
                               int32_t readLen,
-                              gssw_align* alignment);
+                              gssw_align* alignment,
+                              FILE* out);
 
 void gssw_graph_print(gssw_graph* graph);
 void gssw_graph_print_stderr(gssw_graph* graph);
@@ -391,7 +392,8 @@ void gssw_graph_clear(gssw_graph* graph);
 void gssw_graph_destroy(gssw_graph* graph);
 void gssw_graph_print_score_matrices(gssw_graph* graph,
                                      const char* read,
-                                     int32_t readLen);
+                                     int32_t readLen,
+                                     FILE* out);
 
 gssw_graph_mapping* gssw_graph_mapping_create(void);
 void gssw_graph_mapping_destroy(gssw_graph_mapping* m);
