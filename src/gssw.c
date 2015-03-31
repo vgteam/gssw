@@ -902,17 +902,17 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
         if ((ref[i] == read[j] || h == n) &&
             ((d + match == h && ref[i] == read[j])
              || ((d - mismatch == h || d == h) && ref[i] != read[j]))) {
-            //fprintf(stderr, "M\n");
+            //fprintf(stderr, "(%i, %i) M %c %c\n", i, j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'M', 1);
             h = d;
             --i; --j;
         } else if (l == n && (l - gap_open == h || l - gap_extension == h)) {
-            //fprintf(stderr, "D\n");
+            //fprintf(stderr, "(%i, %i) D\n", i, j);
             gssw_cigar_push_back(result, 'D', 1);
             h = l;
             --i;
         } else if (u == n && (u - gap_open == h || u - gap_extension == h)) {
-            //fprintf(stderr, "I\n");
+            //fprintf(stderr, "(%i, %i) I\n", i, j);
             gssw_cigar_push_back(result, 'I', 1);
             h = u;
             --j;
@@ -972,14 +972,17 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
         if (h == n &&
             ((d + match == h && ref[i] == read[j])
              || (d - mismatch == h && ref[i] != read[j]))) {
+            //fprintf(stderr, "(%i, %i) M %c %c\n", i, j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'M', 1);
             h = d;
             --i; --j;
         } else if (l == n && (l - gap_open == h || l - gap_extension == h)) {
+            //fprintf(stderr, "(%i, %i) D\n", i, j);
             gssw_cigar_push_back(result, 'D', 1);
             h = l;
             --i;
         } else if (u == n && (u - gap_open == h || u - gap_extension == h)) {
+            //fprintf(stderr, "(%i, %i) I\n", i, j);
             gssw_cigar_push_back(result, 'I', 1);
             h = u;
             --j;
@@ -1092,9 +1095,8 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
     gssw_graph_mapping* gm = gssw_graph_mapping_create();
     gssw_graph_cigar* gc = &gm->cigar;
-    //uint32_t GRAPH_CIGAR_ALLOC_SIZE = 2;//graph->size; // horrible hack... hack hack hack
     uint32_t graph_cigar_bufsiz = 16;
-    gc->elements = NULL;//(gssw_node_cigar*) calloc(20, sizeof(gssw_node_cigar));
+    gc->elements = NULL;
     gc->elements = realloc((void*) gc->elements, graph_cigar_bufsiz * sizeof(gssw_node_cigar));
     gc->length = 0;
 
@@ -1113,33 +1115,23 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
     // node cigar
     gssw_node_cigar* nc = gc->elements;
+
+    // get terminal soft clipping
     int32_t end_soft_clip = 0;
-    // TODO not handled correctly; due to memory allocation woes
+    // -1 is as we are counting from the opposite side of the base
     if (readLen - readEnd - 1) {
-        //fprintf(stderr, "soft clip at end\n");
-        //nc->cigar = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
-        //gssw_cigar_push_back(nc->cigar, 'S', readLen-readEnd);
-        end_soft_clip = readLen-readEnd-1;
-        //fprintf(stderr, "%i\n", end_soft_clip);
+        end_soft_clip = readLen - readEnd - 1;
     }
 
     //fprintf(stderr, "tracing back, max node = %p %u\n", n, n->id);
     while (score > 0) {
-        //++gc->length;
+
         if (gc->length == graph_cigar_bufsiz) {
             graph_cigar_bufsiz *= 2;
             gc->elements = realloc((void*) gc->elements, graph_cigar_bufsiz * sizeof(gssw_node_cigar));
         }
-        //             gc->elements = realloc((void*) gc->elements, (gc->length + 1) * sizeof(gssw_node_cigar));
 
-        /*
-        if (gc->length > 0 && gc->length % GRAPH_CIGAR_ALLOC_SIZE == 0) {
-            //graph->nodes = realloc((void*)graph->nodes, graph->size + 1024 * sizeof(void*));
-            gc->elements = realloc((void*)gc->elements,
-                                   gc->length + GRAPH_CIGAR_ALLOC_SIZE * sizeof(gssw_node_cigar));
-            nc = &gc->elements[gc->length];
-        }
-        */
+        // write the cigar to the current node
         nc = gc->elements + gc->length;
         nc->cigar = gssw_alignment_trace_back (n->alignment,
                                                &score,
@@ -1256,7 +1248,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
             }
             ++nc;
         } else {
-            gssw_cigar_push_front(nc->cigar, 'S', readEnd);
+            gssw_cigar_push_front(nc->cigar, 'S', readEnd+1);
             break;
         }
 
