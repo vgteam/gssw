@@ -898,10 +898,9 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
         n = (h > n ? h : n);
         //fprintf(stderr, "(%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
 
-        // if we match 
-        if ((ref[i] == read[j] || h == n) &&
+        if (h == n &&
             ((d + match == h && ref[i] == read[j])
-             || ((d - mismatch == h || d == h) && ref[i] != read[j]))) {
+             || (d - mismatch == h && ref[i] != read[j]))) {
             //fprintf(stderr, "(%i, %i) M %c %c\n", i, j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'M', 1);
             h = d;
