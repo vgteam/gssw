@@ -16,7 +16,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
-#include <emmintrin.h>
+#include <smmintrin.h>
 
 /*!	@typedef	structure of the query profile	*/
 struct gssw_profile;

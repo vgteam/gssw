@@ -668,7 +668,6 @@ gssw_align* gssw_fill (const gssw_profile* prof,
 
 	// Find the alignment scores and ending positions
 	if (prof->profile_byte) {
-
 		bests = gssw_sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen,
                              alignment, seed);
 
@@ -896,7 +895,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
         // get the max of the three directions
         int32_t n = (l > u ? l : u);
         n = (h > n ? h : n);
-        //fprintf(stderr, "(%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
+        //fprintf(stderr, "byte (%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
 
         if (h == n &&
             ((d + match == h && ref[i] == read[j])
@@ -968,6 +967,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
         // get the max of the three directions
         int32_t n = (l > u ? l : u);
         n = (h > n ? h : n);
+        //fprintf(stderr, "word (%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
         if (h == n &&
             ((d + match == h && ref[i] == read[j])
              || (d - mismatch == h && ref[i] != read[j]))) {
@@ -1535,8 +1535,8 @@ gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t coun
         for (k = 0; k < count; ++k) {
             ovE = _mm_load_si128(prev[k]->alignment->seed.pvE + j);
             ovH = _mm_load_si128(prev[k]->alignment->seed.pvHStore + j);
-            pvE = _mm_max_epu8(pvE, ovE);
-            pvH = _mm_max_epu8(pvH, ovH);
+            pvE = _mm_max_epu16(pvE, ovE);
+            pvH = _mm_max_epu16(pvH, ovH);
         }
         _mm_store_si128(seed->pvHStore + j, pvH);
         _mm_store_si128(seed->pvE + j, pvE);
@@ -1579,10 +1579,6 @@ gssw_graph_fill (gssw_graph* graph,
         if (prof->profile_byte && !filled_node) {
             free(prof->profile_byte);
             prof->profile_byte = NULL;
-            // free previous nodes which have 8-bit stripes
-            //npp = &graph->nodes[0];
-            //i = 1; // reset iteration
-            //max_score = 0;
             free(read_num);
             gssw_profile_destroy(prof);
             return gssw_graph_fill(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE, maskLen, 1);
