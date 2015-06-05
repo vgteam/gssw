@@ -899,6 +899,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
 
         if (h == n &&
             ((d + match == h && ref[i] == read[j])
+             || (d == h && (ref[i] == 'N' || read[j] == 'N'))
              || (d - mismatch == h && ref[i] != read[j]))) {
             //fprintf(stderr, "(%i, %i) M %c %c\n", i, j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'M', 1);
@@ -970,6 +971,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
         //fprintf(stderr, "word (%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
         if (h == n &&
             ((d + match == h && ref[i] == read[j])
+             || (d == h && (ref[i] == 'N' || read[j] == 'N'))
              || (d - mismatch == h && ref[i] != read[j]))) {
             //fprintf(stderr, "(%i, %i) M %c %c\n", i, j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'M', 1);
