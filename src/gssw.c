@@ -1175,7 +1175,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         int32_t i;
         gssw_node* max_prev = NULL;
         uint16_t l = 0, d = 0, max_score = 0;
-        uint8_t max_diag = 1;
+        uint8_t max_diag = 0;
 
         // determine direction across edge
 
@@ -1188,28 +1188,22 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         if (score_is_byte) {
             for (i = 0; i < n->count_prev; ++i) {
                 gssw_node* cn = n->prev[i];
-
                 l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
                 /*
                 char t = cn->seq[cn->len-1];
-                char q_d = read[readEnd-1];
-                char q_l = read[readEnd];
-                fprintf(stderr, "t=%c q_d=%c q_l=%c d=%i l=%i max_score=%i id=%i\n",
-                        t, q_d, q_l, d, l, max_score, cn->id);
+                char q = read[readEnd-1];
+                fprintf(stderr, "score=%i t=%c q=%c d=%i l=%i h=%i max_score=%i id=%i\n",
+                        score, t, q, d, l, h, max_score, cn->id);
                 */
-                // we need to check if we have a match and a gap which are both possible 
-                // under the scores and the relationship between the query and target strings
-                // if both are possible, we should prefer the match
-
-                if (d > max_score) {
+                if (d > l && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > max_score) {
+                } else if (l > d && l > max_score) {
                     max_score = l;
                     max_prev = cn;
-                    max_diag = 0 || max_diag;
+                    max_diag = 0;
                 }
             }
         } else {
@@ -1217,14 +1211,14 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                 gssw_node* cn = n->prev[i];
                 l = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-                if (d > max_score) {
+                if (d > l && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > max_score) {
+                } else if (l > d && l > max_score) {
                     max_score = l;
                     max_prev = cn;
-                    max_diag = 0 || max_diag;
+                    max_diag = 0;
                 }
             }
         }
