@@ -1197,12 +1197,12 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                 fprintf(stderr, "score=%i t=%c q=%c d=%i l=%i h=%i max_score=%i id=%i\n",
                         score, t, q, d, l, score, max_score, cn->id);
                 */
-                if (d >= l && d > max_score) {
+                bool possible_gap = (score + gap_extension == l || score + gap_open == l);
+                if ((!possible_gap || d >= l) && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > d && l > max_score
-                           && (score + gap_extension == l || score + gap_open == l)) {
+                } else if (l > d && l > max_score && possible_gap) {
                     max_score = l;
                     max_prev = cn;
                     max_diag = 0;
@@ -1213,12 +1213,12 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                 gssw_node* cn = n->prev[i];
                 l = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-                if (d >= l && d > max_score) {
+                bool possible_gap = (score + gap_extension == l || score + gap_open == l);
+                if ((!possible_gap || d >= l) && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > d && l > max_score
-                           && (score + gap_extension == l || score + gap_open == l)) {
+                } else if (l > d && l > max_score && possible_gap) {
                     max_score = l;
                     max_prev = cn;
                     max_diag = 0;
@@ -1246,6 +1246,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
             }
             ++nc;
         } else {
+            //fprintf(stderr, "soft clip of %i\n", readEnd+1);
             gssw_cigar_push_front(nc->cigar, 'S', readEnd+1);
             break;
         }
