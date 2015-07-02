@@ -1134,6 +1134,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
 
         // write the cigar to the current node
         nc = gc->elements + gc->length;
+        //fprintf(stderr, "id=%i\n", n->id);
         nc->cigar = gssw_alignment_trace_back (n->alignment,
                                                &score,
                                                &refEnd,
@@ -1175,7 +1176,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         int32_t i;
         gssw_node* max_prev = NULL;
         uint16_t l = 0, d = 0, max_score = 0;
-        uint8_t max_diag = 0;
+        uint8_t max_diag = 1;
 
         // determine direction across edge
 
@@ -1194,13 +1195,14 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                 char t = cn->seq[cn->len-1];
                 char q = read[readEnd-1];
                 fprintf(stderr, "score=%i t=%c q=%c d=%i l=%i h=%i max_score=%i id=%i\n",
-                        score, t, q, d, l, h, max_score, cn->id);
+                        score, t, q, d, l, score, max_score, cn->id);
                 */
-                if (d > l && d > max_score) {
+                if (d >= l && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > d && l > max_score) {
+                } else if (l > d && l > max_score
+                           && (score + gap_extension == l || score + gap_open == l)) {
                     max_score = l;
                     max_prev = cn;
                     max_diag = 0;
@@ -1211,11 +1213,12 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                 gssw_node* cn = n->prev[i];
                 l = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-                if (d > l && d > max_score) {
+                if (d >= l && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > d && l > max_score) {
+                } else if (l > d && l > max_score
+                           && (score + gap_extension == l || score + gap_open == l)) {
                     max_score = l;
                     max_prev = cn;
                     max_diag = 0;
