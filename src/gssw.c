@@ -31,8 +31,8 @@
  *
  *  Created by Mengyao Zhao on 6/22/10.
  *  Copyright 2010 Boston College. All rights reserved.
- *	Version 0.1.4
- *	Last revision by Erik Garrison 01/02/2014
+ *  Version 0.1.4
+ *  Last revision by Erik Garrison 01/02/2014
  *
  */
 
@@ -71,28 +71,28 @@
 __m128i* gssw_qP_byte (const int8_t* read_num,
                        const int8_t* mat,
                        const int32_t readLen,
-                       const int32_t n,	/* the edge length of the squre matrix mat */
+                       const int32_t n, /* the edge length of the squre matrix mat */
                        uint8_t bias) {
 
-	int32_t segLen = (readLen + 15) / 16; /* Split the 128 bit register into 16 pieces.
-								     Each piece is 8 bit. Split the read into 16 segments.
-								     Calculat 16 segments in parallel.
-								   */
-	__m128i* vProfile = (__m128i*)malloc(n * segLen * sizeof(__m128i));
-	int8_t* t = (int8_t*)vProfile;
-	int32_t nt, i, j, segNum;
+    int32_t segLen = (readLen + 15) / 16; /* Split the 128 bit register into 16 pieces.
+                                     Each piece is 8 bit. Split the read into 16 segments.
+                                     Calculat 16 segments in parallel.
+                                   */
+    __m128i* vProfile = (__m128i*)malloc(n * segLen * sizeof(__m128i));
+    int8_t* t = (int8_t*)vProfile;
+    int32_t nt, i, j, segNum;
 
-	/* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
-	for (nt = 0; LIKELY(nt < n); nt ++) {
-		for (i = 0; i < segLen; i ++) {
-			j = i;
-			for (segNum = 0; LIKELY(segNum < 16) ; segNum ++) {
-				*t++ = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias;
-				j += segLen;
-			}
-		}
-	}
-	return vProfile;
+    /* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
+    for (nt = 0; LIKELY(nt < n); nt ++) {
+        for (i = 0; i < segLen; i ++) {
+            j = i;
+            for (segNum = 0; LIKELY(segNum < 16) ; segNum ++) {
+                *t++ = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias;
+                j += segLen;
+            }
+        }
+    }
+    return vProfile;
 }
 
 /* To determine the maximum values within each vector, rather than between vectors. */
@@ -118,13 +118,13 @@ __m128i* gssw_qP_byte (const int8_t* read_num,
    The returned positions are 0-based.
  */
 gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
-                                       int8_t ref_dir,	// 0: forward ref; 1: reverse ref
+                                       int8_t ref_dir, // 0: forward ref; 1: reverse ref
                                        int32_t refLen,
                                        int32_t readLen,
                                        const uint8_t weight_gapO, /* will be used as - */
                                        const uint8_t weight_gapE, /* will be used as - */
                                        __m128i* vProfile,
-                                       uint8_t terminate,	/* the best alignment score: used to terminate
+                                       uint8_t terminate, /* the best alignment score: used to terminate
                                                                the matrix calculation when locating the
                                                                alignment beginning point. If this score
                                                                is set to 0, it will not be used */
@@ -133,13 +133,13 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
                                        gssw_align* alignment, /* to save seed and matrix */
                                        const gssw_seed* seed) {     /* to seed the alignment */
 
-	uint8_t max = 0;		                     /* the max alignment score */
-	int32_t end_read = readLen - 1;
-	int32_t end_ref = -1; /* 0_based best alignment ending point; Initialized as isn't aligned -1. */
-	int32_t segLen = (readLen + 15) / 16; /* number of segment */
+    uint8_t max = 0;                     /* the max alignment score */
+    int32_t end_read = readLen - 1;
+    int32_t end_ref = -1; /* 0_based best alignment ending point; Initialized as isn't aligned -1. */
+    int32_t segLen = (readLen + 15) / 16; /* number of segment */
 
     /* Initialize buffers used in alignment */
-	__m128i* pvHStore;
+    __m128i* pvHStore;
     __m128i* pvHLoad;
     __m128i* pvHmax;
     __m128i* pvE;
@@ -177,57 +177,57 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
     /* Record that we have done a byte-order alignment */
     alignment->is_byte = 1;
 
-	/* Define 16 byte 0 vector. */
-	__m128i vZero = _mm_set1_epi32(0);
+    /* Define 16 byte 0 vector. */
+    __m128i vZero = _mm_set1_epi32(0);
 
     /* Used for iteration */
-	int32_t i, j;
+    int32_t i, j;
 
     /* 16 byte insertion begin vector */
-	__m128i vGapO = _mm_set1_epi8(weight_gapO);
+    __m128i vGapO = _mm_set1_epi8(weight_gapO);
 
-	/* 16 byte insertion extension vector */
-	__m128i vGapE = _mm_set1_epi8(weight_gapE);
+    /* 16 byte insertion extension vector */
+    __m128i vGapE = _mm_set1_epi8(weight_gapE);
 
-	/* 16 byte bias vector */
-	__m128i vBias = _mm_set1_epi8(bias);
+    /* 16 byte bias vector */
+    __m128i vBias = _mm_set1_epi8(bias);
 
-	__m128i vMaxScore = vZero; /* Trace the highest score of the whole SW matrix. */
-	__m128i vMaxMark = vZero; /* Trace the highest score till the previous column. */
-	__m128i vTemp;
-	int32_t begin = 0, end = refLen, step = 1;
+    __m128i vMaxScore = vZero; /* Trace the highest score of the whole SW matrix. */
+    __m128i vMaxMark = vZero; /* Trace the highest score till the previous column. */
+    __m128i vTemp;
+    int32_t begin = 0, end = refLen, step = 1;
 
-	/* outer loop to process the reference sequence */
-	if (ref_dir == 1) {
-		begin = refLen - 1;
-		end = -1;
-		step = -1;
-	}
-	for (i = begin; LIKELY(i != end); i += step) {
-		int32_t cmp;
-		__m128i e = vZero, vF = vZero, vMaxColumn = vZero; /* Initialize F value to 0.
-							   Any errors to vH values will be corrected in the Lazy_F loop.
-							 */
-		//max16(maxColumn[i], vMaxColumn);
-		//fprintf(stderr, "middle[%d]: %d\n", i, maxColumn[i]);
+    /* outer loop to process the reference sequence */
+    if (ref_dir == 1) {
+        begin = refLen - 1;
+        end = -1;
+        step = -1;
+    }
+    for (i = begin; LIKELY(i != end); i += step) {
+        int32_t cmp;
+        __m128i e = vZero, vF = vZero, vMaxColumn = vZero; /* Initialize F value to 0.
+                               Any errors to vH values will be corrected in the Lazy_F loop.
+                             */
+        //max16(maxColumn[i], vMaxColumn);
+        //fprintf(stderr, "middle[%d]: %d\n", i, maxColumn[i]);
 
-		//__m128i vH = pvHStore[segLen - 1];
+        //__m128i vH = pvHStore[segLen - 1];
         __m128i vH = _mm_load_si128 (pvHStore + (segLen - 1));
-		vH = _mm_slli_si128 (vH, 1); /* Shift the 128-bit value in vH left by 1 byte. */
-		__m128i* vP = vProfile + ref[i] * segLen; /* Right part of the vProfile */
+        vH = _mm_slli_si128 (vH, 1); /* Shift the 128-bit value in vH left by 1 byte. */
+        __m128i* vP = vProfile + ref[i] * segLen; /* Right part of the vProfile */
 
-		/* Swap the 2 H buffers. */
-		__m128i* pv = pvHLoad;
-		pvHLoad = pvHStore;
-		pvHStore = pv;
+        /* Swap the 2 H buffers. */
+        __m128i* pv = pvHLoad;
+        pvHLoad = pvHStore;
+        pvHStore = pv;
 
-		/* inner loop to process the query sequence */
-		for (j = 0; LIKELY(j < segLen); ++j) {
+        /* inner loop to process the query sequence */
+        for (j = 0; LIKELY(j < segLen); ++j) {
 
-			vH = _mm_adds_epu8(vH, _mm_load_si128(vP + j));
-			vH = _mm_subs_epu8(vH, vBias); /* vH will be always > 0 */
-	//	max16(maxColumn[i], vH);
-	//	fprintf(stderr, "H[%d]: %d\n", i, maxColumn[i]);
+            vH = _mm_adds_epu8(vH, _mm_load_si128(vP + j));
+            vH = _mm_subs_epu8(vH, vBias); /* vH will be always > 0 */
+            // max16(maxColumn[i], vH);
+            // fprintf(stderr, "H[%d]: %d\n", i, maxColumn[i]);
             /*
             int8_t* t;
             int32_t ti;
@@ -236,13 +236,13 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             fprintf(stdout, "\n");
             */
 
-			/* Get max from vH, vE and vF. */
-			e = _mm_load_si128(pvE + j);
-			//_mm_store_si128(vE + j, e);
+            /* Get max from vH, vE and vF. */
+            e = _mm_load_si128(pvE + j);
+            //_mm_store_si128(vE + j, e);
 
-			vH = _mm_max_epu8(vH, e);
-			vH = _mm_max_epu8(vH, vF);
-			vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
+            vH = _mm_max_epu8(vH, e);
+            vH = _mm_max_epu8(vH, vF);
+            vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
 
             // max16(maxColumn[i], vMaxColumn);
             //fprintf(stdout, "middle[%d]: %d\n", i, maxColumn[i]);
@@ -250,27 +250,27 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             //for (t = (int8_t*)&vMaxColumn, ti = 0; ti < 16; ++ti) fprintf(stdout, "%d\t", *t++);
             //fprintf(stdout, "\n");
 
-			/* Save vH values. */
-			_mm_store_si128(pvHStore + j, vH);
+            /* Save vH values. */
+            _mm_store_si128(pvHStore + j, vH);
 
-			/* Update vE value. */
-			vH = _mm_subs_epu8(vH, vGapO); /* saturation arithmetic, result >= 0 */
-			e = _mm_subs_epu8(e, vGapE);
-			e = _mm_max_epu8(e, vH);
+            /* Update vE value. */
+            vH = _mm_subs_epu8(vH, vGapO); /* saturation arithmetic, result >= 0 */
+            e = _mm_subs_epu8(e, vGapE);
+            e = _mm_max_epu8(e, vH);
 
-			/* Update vF value. */
-			vF = _mm_subs_epu8(vF, vGapE);
-			vF = _mm_max_epu8(vF, vH);
+            /* Update vF value. */
+            vF = _mm_subs_epu8(vF, vGapE);
+            vF = _mm_max_epu8(vF, vH);
 
             /* Save E */
-			_mm_store_si128(pvE + j, e);
+            _mm_store_si128(pvE + j, e);
 
-			/* Load the next vH. */
-			vH = _mm_load_si128(pvHLoad + j);
-		}
+            /* Load the next vH. */
+            vH = _mm_load_si128(pvHLoad + j);
+        }
 
 
-		/* Lazy_F loop: has been revised to disallow adjecent insertion and then deletion, so don't update E(i, j), learn from SWPS3 */
+        /* Lazy_F loop: has been revised to disallow adjecent insertion and then deletion, so don't update E(i, j), learn from SWPS3 */
         /* reset pointers to the start of the saved data */
         j = 0;
         vH = _mm_load_si128 (pvHStore + j);
@@ -281,13 +281,13 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         vF = _mm_slli_si128 (vF, 1);
 
         vTemp = _mm_subs_epu8 (vH, vGapO);
-		vTemp = _mm_subs_epu8 (vF, vTemp);
-		vTemp = _mm_cmpeq_epi8 (vTemp, vZero);
-		cmp  = _mm_movemask_epi8 (vTemp);
+        vTemp = _mm_subs_epu8 (vF, vTemp);
+        vTemp = _mm_cmpeq_epi8 (vTemp, vZero);
+        cmp  = _mm_movemask_epi8 (vTemp);
         while (cmp != 0xffff)
         {
             vH = _mm_max_epu8 (vH, vF);
-			vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
+            vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
             _mm_store_si128 (pvHStore + j, vH);
 
             vF = _mm_subs_epu8 (vF, vGapE);
@@ -306,25 +306,25 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             cmp  = _mm_movemask_epi8 (vTemp);
         }
 
-		vMaxScore = _mm_max_epu8(vMaxScore, vMaxColumn);
-		vTemp = _mm_cmpeq_epi8(vMaxMark, vMaxScore);
-		cmp = _mm_movemask_epi8(vTemp);
-		if (cmp != 0xffff) {
-			uint8_t temp;
-			vMaxMark = vMaxScore;
-			m128i_max16(temp, vMaxScore);
-			vMaxScore = vMaxMark;
+        vMaxScore = _mm_max_epu8(vMaxScore, vMaxColumn);
+        vTemp = _mm_cmpeq_epi8(vMaxMark, vMaxScore);
+        cmp = _mm_movemask_epi8(vTemp);
+        if (cmp != 0xffff) {
+            uint8_t temp;
+            vMaxMark = vMaxScore;
+            m128i_max16(temp, vMaxScore);
+            vMaxScore = vMaxMark;
 
-			if (LIKELY(temp > max)) {
-				max = temp;
-				if (max + bias >= 255) break;	//overflow
-				end_ref = i;
+            if (LIKELY(temp > max)) {
+                max = temp;
+                if (max + bias >= 255) break; //overflow
+                end_ref = i;
 
-				/* Store the column with the highest alignment score in order to trace the alignment ending position on read. */
-				for (j = 0; LIKELY(j < segLen); ++j) pvHmax[j] = pvHStore[j];
+                /* Store the column with the highest alignment score in order to trace the alignment ending position on read. */
+                for (j = 0; LIKELY(j < segLen); ++j) pvHmax[j] = pvHStore[j];
 
-			}
-		}
+            }
+        }
 
         // save the current column
 
@@ -341,72 +341,72 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         }
 
 
-		/* Record the max score of current column. */
-		//max16(maxColumn[i], vMaxColumn);
-		//fprintf(stderr, "maxColumn[%d]: %d\n", i, maxColumn[i]);
-		//if (maxColumn[i] == terminate) break;
+        /* Record the max score of current column. */
+        //max16(maxColumn[i], vMaxColumn);
+        //fprintf(stderr, "maxColumn[%d]: %d\n", i, maxColumn[i]);
+        //if (maxColumn[i] == terminate) break;
 
-	}
+    }
         
     //fprintf(stderr, "%p %p %p %p %p %p\n", *pmH, mH, pvHmax, pvE, pvHLoad, pvHStore);
     // save the last vH
     memcpy(alignment->seed.pvE,      pvE,      segLen*sizeof(__m128i));
     memcpy(alignment->seed.pvHStore, pvHStore, segLen*sizeof(__m128i));
 
-	/* Trace the alignment ending position on read. */
-	uint8_t *t = (uint8_t*)pvHmax;
-	int32_t column_len = segLen * 16;
-	for (i = 0; LIKELY(i < column_len); ++i, ++t) {
-		int32_t temp;
-		if (*t == max) {
-			temp = i / 16 + i % 16 * segLen;
-			if (temp < end_read) end_read = temp;
-		}
-	}
+    /* Trace the alignment ending position on read. */
+    uint8_t *t = (uint8_t*)pvHmax;
+    int32_t column_len = segLen * 16;
+    for (i = 0; LIKELY(i < column_len); ++i, ++t) {
+        int32_t temp;
+        if (*t == max) {
+            temp = i / 16 + i % 16 * segLen;
+            if (temp < end_read) end_read = temp;
+        }
+    }
 
     //fprintf(stderr, "%p %p %p %p %p %p\n", *pmH, mH, pvHmax, pvE, pvHLoad, pvHStore);
 
-	free(pvE);
-	free(pvHmax);
-	free(pvHLoad);
+    free(pvE);
+    free(pvHmax);
+    free(pvHLoad);
     free(pvHStore);
 
-	/* Find the most possible 2nd best alignment. */
-	gssw_alignment_end* bests = (gssw_alignment_end*) calloc(2, sizeof(gssw_alignment_end));
-	bests[0].score = max + bias >= 255 ? 255 : max;
-	bests[0].ref = end_ref;
-	bests[0].read = end_read;
+    /* Find the most possible 2nd best alignment. */
+    gssw_alignment_end* bests = (gssw_alignment_end*) calloc(2, sizeof(gssw_alignment_end));
+    bests[0].score = max + bias >= 255 ? 255 : max;
+    bests[0].ref = end_ref;
+    bests[0].read = end_read;
 
 
-	return bests;
+    return bests;
 }
 
 __m128i* gssw_qP_word (const int8_t* read_num,
-				  const int8_t* mat,
-				  const int32_t readLen,
-				  const int32_t n) {
+                  const int8_t* mat,
+                  const int32_t readLen,
+                  const int32_t n) {
 
-	int32_t segLen = (readLen + 7) / 8;
-	__m128i* vProfile = (__m128i*)malloc(n * segLen * sizeof(__m128i));
-	int16_t* t = (int16_t*)vProfile;
-	int32_t nt, i, j;
-	int32_t segNum;
+    int32_t segLen = (readLen + 7) / 8;
+    __m128i* vProfile = (__m128i*)malloc(n * segLen * sizeof(__m128i));
+    int16_t* t = (int16_t*)vProfile;
+    int32_t nt, i, j;
+    int32_t segNum;
 
-	/* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
-	for (nt = 0; LIKELY(nt < n); nt ++) {
-		for (i = 0; i < segLen; i ++) {
-			j = i;
-			for (segNum = 0; LIKELY(segNum < 8) ; segNum ++) {
-				*t++ = j>= readLen ? 0 : mat[nt * n + read_num[j]];
-				j += segLen;
-			}
-		}
-	}
-	return vProfile;
+    /* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
+    for (nt = 0; LIKELY(nt < n); nt ++) {
+        for (i = 0; i < segLen; i ++) {
+            j = i;
+            for (segNum = 0; LIKELY(segNum < 8) ; segNum ++) {
+                *t++ = j>= readLen ? 0 : mat[nt * n + read_num[j]];
+                j += segLen;
+            }
+        }
+    }
+    return vProfile;
 }
 
 gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
-                                       int8_t ref_dir,	// 0: forward ref; 1: reverse ref
+                                       int8_t ref_dir, // 0: forward ref; 1: reverse ref
                                        int32_t refLen,
                                        int32_t readLen,
                                        const uint8_t weight_gapO, /* will be used as - */
@@ -418,13 +418,13 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
                                        const gssw_seed* seed) {     /* to seed the alignment */
     
 
-	uint16_t max = 0;		                     /* the max alignment score */
-	int32_t end_read = readLen - 1;
-	int32_t end_ref = 0; /* 1_based best alignment ending point; Initialized as isn't aligned - 0. */
-	int32_t segLen = (readLen + 7) / 8; /* number of segment */
+    uint16_t max = 0;                     /* the max alignment score */
+    int32_t end_read = readLen - 1;
+    int32_t end_ref = 0; /* 1_based best alignment ending point; Initialized as isn't aligned - 0. */
+    int32_t segLen = (readLen + 7) / 8; /* number of segment */
 
     /* Initialize buffers used in alignment */
-	__m128i* pvHStore;
+    __m128i* pvHStore;
     __m128i* pvHLoad;
     __m128i* pvHmax;
     __m128i* pvE;
@@ -463,103 +463,103 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
     /* Record that we have done a word-order alignment */
     alignment->is_byte = 0;
 
-	/* Define 16 byte 0 vector. */
-	__m128i vZero = _mm_set1_epi32(0);
+    /* Define 16 byte 0 vector. */
+    __m128i vZero = _mm_set1_epi32(0);
 
     /* Used for iteration */
-	int32_t i, j, k;
+    int32_t i, j, k;
 
-	/* 16 byte insertion begin vector */
-	__m128i vGapO = _mm_set1_epi16(weight_gapO);
+    /* 16 byte insertion begin vector */
+    __m128i vGapO = _mm_set1_epi16(weight_gapO);
 
-	/* 16 byte insertion extension vector */
-	__m128i vGapE = _mm_set1_epi16(weight_gapE);
+    /* 16 byte insertion extension vector */
+    __m128i vGapE = _mm_set1_epi16(weight_gapE);
 
-	/* 16 byte bias vector */
-	__m128i vMaxScore = vZero; /* Trace the highest score of the whole SW matrix. */
-	__m128i vMaxMark = vZero; /* Trace the highest score till the previous column. */
-	__m128i vTemp;
-	int32_t begin = 0, end = refLen, step = 1;
+    /* 16 byte bias vector */
+    __m128i vMaxScore = vZero; /* Trace the highest score of the whole SW matrix. */
+    __m128i vMaxMark = vZero; /* Trace the highest score till the previous column. */
+    __m128i vTemp;
+    int32_t begin = 0, end = refLen, step = 1;
 
-	/* outer loop to process the reference sequence */
-	if (ref_dir == 1) {
-		begin = refLen - 1;
-		end = -1;
-		step = -1;
-	}
-	for (i = begin; LIKELY(i != end); i += step) {
-		int32_t cmp;
-		__m128i e = vZero, vF = vZero; /* Initialize F value to 0.
-							   Any errors to vH values will be corrected in the Lazy_F loop.
-							 */
-		__m128i vH = pvHStore[segLen - 1];
-		vH = _mm_slli_si128 (vH, 2); /* Shift the 128-bit value in vH left by 2 byte. */
+    /* outer loop to process the reference sequence */
+    if (ref_dir == 1) {
+        begin = refLen - 1;
+        end = -1;
+        step = -1;
+    }
+    for (i = begin; LIKELY(i != end); i += step) {
+        int32_t cmp;
+        __m128i e = vZero, vF = vZero; /* Initialize F value to 0.
+                               Any errors to vH values will be corrected in the Lazy_F loop.
+                             */
+        __m128i vH = pvHStore[segLen - 1];
+        vH = _mm_slli_si128 (vH, 2); /* Shift the 128-bit value in vH left by 2 byte. */
 
-		/* Swap the 2 H buffers. */
-		__m128i* pv = pvHLoad;
+        /* Swap the 2 H buffers. */
+        __m128i* pv = pvHLoad;
 
-		__m128i vMaxColumn = vZero; /* vMaxColumn is used to record the max values of column i. */
+        __m128i vMaxColumn = vZero; /* vMaxColumn is used to record the max values of column i. */
 
-		__m128i* vP = vProfile + ref[i] * segLen; /* Right part of the vProfile */
-		pvHLoad = pvHStore;
-		pvHStore = pv;
+        __m128i* vP = vProfile + ref[i] * segLen; /* Right part of the vProfile */
+        pvHLoad = pvHStore;
+        pvHStore = pv;
 
-		/* inner loop to process the query sequence */
-		for (j = 0; LIKELY(j < segLen); j ++) {
-			vH = _mm_adds_epi16(vH, _mm_load_si128(vP + j));
+        /* inner loop to process the query sequence */
+        for (j = 0; LIKELY(j < segLen); j ++) {
+            vH = _mm_adds_epi16(vH, _mm_load_si128(vP + j));
 
-			/* Get max from vH, vE and vF. */
-			e = _mm_load_si128(pvE + j);
-			vH = _mm_max_epi16(vH, e);
-			vH = _mm_max_epi16(vH, vF);
-			vMaxColumn = _mm_max_epi16(vMaxColumn, vH);
+            /* Get max from vH, vE and vF. */
+            e = _mm_load_si128(pvE + j);
+            vH = _mm_max_epi16(vH, e);
+            vH = _mm_max_epi16(vH, vF);
+            vMaxColumn = _mm_max_epi16(vMaxColumn, vH);
 
-			/* Save vH values. */
-			_mm_store_si128(pvHStore + j, vH);
+            /* Save vH values. */
+            _mm_store_si128(pvHStore + j, vH);
 
-			/* Update vE value. */
-			vH = _mm_subs_epu16(vH, vGapO); /* saturation arithmetic, result >= 0 */
-			e = _mm_subs_epu16(e, vGapE);
-			e = _mm_max_epi16(e, vH);
-			_mm_store_si128(pvE + j, e);
+            /* Update vE value. */
+            vH = _mm_subs_epu16(vH, vGapO); /* saturation arithmetic, result >= 0 */
+            e = _mm_subs_epu16(e, vGapE);
+            e = _mm_max_epi16(e, vH);
+            _mm_store_si128(pvE + j, e);
 
-			/* Update vF value. */
-			vF = _mm_subs_epu16(vF, vGapE);
-			vF = _mm_max_epi16(vF, vH);
+            /* Update vF value. */
+            vF = _mm_subs_epu16(vF, vGapE);
+            vF = _mm_max_epi16(vF, vH);
 
-			/* Load the next vH. */
-			vH = _mm_load_si128(pvHLoad + j);
-		}
+            /* Load the next vH. */
+            vH = _mm_load_si128(pvHLoad + j);
+        }
 
-		/* Lazy_F loop: has been revised to disallow adjecent insertion and then deletion, so don't update E(i, j), learn from SWPS3 */
-		for (k = 0; LIKELY(k < 8); ++k) {
-			vF = _mm_slli_si128 (vF, 2);
-			for (j = 0; LIKELY(j < segLen); ++j) {
-				vH = _mm_load_si128(pvHStore + j);
-				vH = _mm_max_epi16(vH, vF);
-				_mm_store_si128(pvHStore + j, vH);
-				vH = _mm_subs_epu16(vH, vGapO);
-				vF = _mm_subs_epu16(vF, vGapE);
-				if (UNLIKELY(! _mm_movemask_epi8(_mm_cmpgt_epi16(vF, vH)))) goto end;
-			}
-		}
+        /* Lazy_F loop: has been revised to disallow adjecent insertion and then deletion, so don't update E(i, j), learn from SWPS3 */
+        for (k = 0; LIKELY(k < 8); ++k) {
+            vF = _mm_slli_si128 (vF, 2);
+            for (j = 0; LIKELY(j < segLen); ++j) {
+                vH = _mm_load_si128(pvHStore + j);
+                vH = _mm_max_epi16(vH, vF);
+                _mm_store_si128(pvHStore + j, vH);
+                vH = _mm_subs_epu16(vH, vGapO);
+                vF = _mm_subs_epu16(vF, vGapE);
+                if (UNLIKELY(! _mm_movemask_epi8(_mm_cmpgt_epi16(vF, vH)))) goto end;
+            }
+        }
 
 end:
-		vMaxScore = _mm_max_epi16(vMaxScore, vMaxColumn);
-		vTemp = _mm_cmpeq_epi16(vMaxMark, vMaxScore);
-		cmp = _mm_movemask_epi8(vTemp);
-		if (cmp != 0xffff) {
-			uint16_t temp;
-			vMaxMark = vMaxScore;
-			m128i_max8(temp, vMaxScore);
-			vMaxScore = vMaxMark;
+        vMaxScore = _mm_max_epi16(vMaxScore, vMaxColumn);
+        vTemp = _mm_cmpeq_epi16(vMaxMark, vMaxScore);
+        cmp = _mm_movemask_epi8(vTemp);
+        if (cmp != 0xffff) {
+            uint16_t temp;
+            vMaxMark = vMaxScore;
+            m128i_max8(temp, vMaxScore);
+            vMaxScore = vMaxMark;
 
-			if (LIKELY(temp > max)) {
-				max = temp;
-				end_ref = i;
-				for (j = 0; LIKELY(j < segLen); ++j) pvHmax[j] = pvHStore[j];
-			}
-		}
+            if (LIKELY(temp > max)) {
+                max = temp;
+                end_ref = i;
+                for (j = 0; LIKELY(j < segLen); ++j) pvHmax[j] = pvHStore[j];
+            }
+        }
 
         /* save current column */
         for (j = 0; LIKELY(j < segLen); ++j) {
@@ -573,81 +573,81 @@ end:
             //fprintf(stdout, "\n");
         }
 
-		/* Record the max score of current column. */
-		//max8(maxColumn[i], vMaxColumn);
-		//if (maxColumn[i] == terminate) break;
+        /* Record the max score of current column. */
+        //max8(maxColumn[i], vMaxColumn);
+        //if (maxColumn[i] == terminate) break;
 
-	}
+    }
 
     memcpy(alignment->seed.pvE,      pvE,      segLen*sizeof(__m128i));
     memcpy(alignment->seed.pvHStore, pvHStore, segLen*sizeof(__m128i));
 
 
-	/* Trace the alignment ending position on read. */
-	uint16_t *t = (uint16_t*)pvHmax;
-	int32_t column_len = segLen * 8;
-	for (i = 0; LIKELY(i < column_len); ++i, ++t) {
-		int32_t temp;
-		if (*t == max) {
-			temp = i / 8 + i % 8 * segLen;
-			if (temp < end_read) end_read = temp;
-		}
-	}
+    /* Trace the alignment ending position on read. */
+    uint16_t *t = (uint16_t*)pvHmax;
+    int32_t column_len = segLen * 8;
+    for (i = 0; LIKELY(i < column_len); ++i, ++t) {
+        int32_t temp;
+        if (*t == max) {
+            temp = i / 8 + i % 8 * segLen;
+            if (temp < end_read) end_read = temp;
+        }
+    }
 
-	free(pvE);
-	free(pvHmax);
-	free(pvHLoad);
+    free(pvE);
+    free(pvHmax);
+    free(pvHLoad);
     free(pvHStore);
 
-	/* Find the most possible 2nd best alignment. */
-	gssw_alignment_end* bests = (gssw_alignment_end*) calloc(2, sizeof(gssw_alignment_end));
-	bests[0].score = max;
-	bests[0].ref = end_ref;
-	bests[0].read = end_read;
+    /* Find the most possible 2nd best alignment. */
+    gssw_alignment_end* bests = (gssw_alignment_end*) calloc(2, sizeof(gssw_alignment_end));
+    bests[0].score = max;
+    bests[0].ref = end_ref;
+    bests[0].read = end_read;
 
-	return bests;
+    return bests;
 }
 
-int8_t* gssw_seq_reverse(const int8_t* seq, int32_t end)	/* end is 0-based alignment ending position */
+int8_t* gssw_seq_reverse(const int8_t* seq, int32_t end) /* end is 0-based alignment ending position */
 {
-	int8_t* reverse = (int8_t*)calloc(end + 1, sizeof(int8_t));
-	int32_t start = 0;
-	while (LIKELY(start <= end)) {
-		reverse[start] = seq[end];
-		reverse[end] = seq[start];
-		++ start;
-		-- end;
-	}
-	return reverse;
+    int8_t* reverse = (int8_t*)calloc(end + 1, sizeof(int8_t));
+    int32_t start = 0;
+    while (LIKELY(start <= end)) {
+        reverse[start] = seq[end];
+        reverse[end] = seq[start];
+        ++ start;
+        -- end;
+    }
+    return reverse;
 }
 
 gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n, const int8_t score_size) {
-	gssw_profile* p = (gssw_profile*)calloc(1, sizeof(struct gssw_profile));
-	p->profile_byte = 0;
-	p->profile_word = 0;
-	p->bias = 0;
+    gssw_profile* p = (gssw_profile*)calloc(1, sizeof(struct gssw_profile));
+    p->profile_byte = 0;
+    p->profile_word = 0;
+    p->bias = 0;
 
-	if (score_size == 0 || score_size == 2) {
-		/* Find the bias to use in the substitution matrix */
-		int32_t bias = 0, i;
-		for (i = 0; i < n*n; i++) if (mat[i] < bias) bias = mat[i];
-		bias = abs(bias);
+    if (score_size == 0 || score_size == 2) {
+        /* Find the bias to use in the substitution matrix */
+        int32_t bias = 0, i;
+        for (i = 0; i < n*n; i++) if (mat[i] < bias) bias = mat[i];
+        bias = abs(bias);
 
-		p->bias = bias;
-		p->profile_byte = gssw_qP_byte (read, mat, readLen, n, bias);
-	}
-	if (score_size == 1 || score_size == 2) p->profile_word = gssw_qP_word (read, mat, readLen, n);
-	p->read = read;
-	p->mat = mat;
-	p->readLen = readLen;
-	p->n = n;
-	return p;
+        p->bias = bias;
+        p->profile_byte = gssw_qP_byte (read, mat, readLen, n, bias);
+    }
+    if (score_size == 1 || score_size == 2) p->profile_word = gssw_qP_word (read, mat, readLen, n);
+    p->read = read;
+    p->mat = mat;
+    p->readLen = readLen;
+    p->n = n;
+    return p;
 }
 
 void gssw_init_destroy (gssw_profile* p) {
-	free(p->profile_byte);
-	free(p->profile_word);
-	free(p);
+    free(p->profile_byte);
+    free(p->profile_word);
+    free(p);
 }
 
 gssw_align* gssw_fill (const gssw_profile* prof,
@@ -658,48 +658,48 @@ gssw_align* gssw_fill (const gssw_profile* prof,
                        const int32_t maskLen,
                        gssw_seed* seed) {
 
-	gssw_alignment_end* bests = 0;
-	int32_t readLen = prof->readLen;
+    gssw_alignment_end* bests = 0;
+    int32_t readLen = prof->readLen;
     gssw_align* alignment = gssw_align_create();
 
-	if (maskLen < 15) {
-		fprintf(stderr, "When maskLen < 15, the function ssw_align doesn't return 2nd best alignment information.\n");
-	}
+    if (maskLen < 15) {
+        fprintf(stderr, "When maskLen < 15, the function ssw_align doesn't return 2nd best alignment information.\n");
+    }
 
-	// Find the alignment scores and ending positions
-	if (prof->profile_byte) {
-		bests = gssw_sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen,
+    // Find the alignment scores and ending positions
+    if (prof->profile_byte) {
+        bests = gssw_sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen,
                              alignment, seed);
 
-		if (prof->profile_word && bests[0].score == 255) {
-			free(bests);
+        if (prof->profile_word && bests[0].score == 255) {
+            free(bests);
             gssw_align_clear_matrix_and_seed(alignment);
             bests = gssw_sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen,
                                       alignment, seed);
         } else if (bests[0].score == 255) {
-			fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
-			return 0;
-		}
-	} else if (prof->profile_word) {
-		bests = gssw_sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
+            fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
+            return 0;
+        }
+    } else if (prof->profile_word) {
+        bests = gssw_sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
                                   alignment, seed);
     } else {
-		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
-		return 0;
-	}
-	alignment->score1 = bests[0].score;
-	alignment->ref_end1 = bests[0].ref;
-	alignment->read_end1 = bests[0].read;
-	if (maskLen >= 15) {
-		alignment->score2 = bests[1].score;
-		alignment->ref_end2 = bests[1].ref;
-	} else {
-	    alignment->score2 = 0;
-		alignment->ref_end2 = -1;
-	}
-	free(bests);
+        fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
+        return 0;
+    }
+    alignment->score1 = bests[0].score;
+    alignment->ref_end1 = bests[0].ref;
+    alignment->read_end1 = bests[0].read;
+    if (maskLen >= 15) {
+        alignment->score2 = bests[1].score;
+        alignment->ref_end2 = bests[1].ref;
+    } else {
+        alignment->score2 = 0;
+        alignment->ref_end2 = -1;
+    }
+    free(bests);
 
-	return alignment;
+    return alignment;
 }
 
 gssw_align* gssw_align_create (void) {
@@ -707,14 +707,14 @@ gssw_align* gssw_align_create (void) {
     a->seed.pvHStore = NULL;
     a->seed.pvE = NULL;
     a->mH = NULL;
-	a->ref_begin1 = -1;
-	a->read_begin1 = -1;
+    a->ref_begin1 = -1;
+    a->read_begin1 = -1;
     return a;
 }
 
 void gssw_align_destroy (gssw_align* a) {
     gssw_align_clear_matrix_and_seed(a);
-	free(a);
+    free(a);
 }
 
 void gssw_align_clear_matrix_and_seed (gssw_align* a) {
@@ -821,6 +821,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        uint16_t* score,
                                        int32_t* refEnd,
                                        int32_t* readEnd,
+                                       int32_t* gap,
                                        const char* ref,
                                        int32_t refLen,
                                        const char* read,
@@ -834,6 +835,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                               score,
                                               refEnd,
                                               readEnd,
+                                              gap,
                                               ref,
                                               refLen,
                                               read,
@@ -847,6 +849,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                               score,
                                               refEnd,
                                               readEnd,
+                                              gap,
                                               ref,
                                               refLen,
                                               read,
@@ -862,6 +865,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
+                                            int32_t* gap,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
@@ -874,57 +878,82 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
     uint8_t* mH = (uint8_t*)alignment->mH;
     int32_t i = *refEnd;
     int32_t j = *readEnd;
+    int32_t g = *gap;
     // find maximum
     uint8_t h = mH[readLen*i + j];
-	gssw_cigar* result = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
+    gssw_cigar* result = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
     result->length = 0;
 
-    while (LIKELY(h != 0 && i >= 0 && j >= 0)) {
+    while (LIKELY(h > 0 && i >= 0 && j >= 0)) {
         // look at neighbors
-        int32_t d = 0, l = 0, u = 0;
+        int32_t d = -1, l = -1, u = -1;
         if (i > 0 && j > 0) {
             d = mH[readLen*(i-1) + (j-1)];
+            if (g || (d + match != h && d != h && d - mismatch != h)) {
+                d = -1;
+            }
         }
         if (i > 0) {
             l = mH[readLen*(i-1) + j];
+            if (l - gap_open != h && l - gap_extension != h) {
+                l = -1;
+            }
         }
         if (j > 0) {
             u = mH[readLen*i + (j-1)];
+            if (u - gap_open != h && u - gap_extension != h) {
+                u = -1;
+            }
         }
 
         // get the max of the three directions
         int32_t n = (l > u ? l : u);
-        n = (h > n ? h : n);
+        n = (d > n || (d + match == h && ref[i] == read[j]) ? d : n);
+        if (n == -1 && h == 2 && ref[i] == read[j]) {
+            n = 0;
+            d = 0;
+        }
         //fprintf(stderr, "byte (%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
 
-        if (h == n &&
-            ((d + match == h && ref[i] == read[j])
-             || (d == h && (ref[i] == 'N' || read[j] == 'N'))
-             || (d - mismatch == h && ref[i] != read[j]))) {
-            //fprintf(stderr, "(%i, %i) M %c %c\n", i, j, ref[i], read[j]);
+        if (d == n && !g && d + match == h && ref[i] == read[j]) {
+            // fprintf(stderr, "%iM[%c%c]", j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'M', 1);
             h = d;
             --i; --j;
+        } else if (d == n && !g && d == h && (ref[i] == 'N' || read[j] == 'N')) {
+            // fprintf(stderr, "%iN[%c%c]", j, ref[i], read[j]);
+            gssw_cigar_push_back(result, 'N', 1);
+            h = d;
+            --i; --j;
+        } else if (d == n && !g && d - mismatch == h && ref[i] != read[j]) {
+            // fprintf(stderr, "%iX[%c%c]", j, ref[i], read[j]);
+            gssw_cigar_push_back(result, 'X', 1);
+            h = d;
+            --i; --j;
         } else if (l == n && (l - gap_open == h || l - gap_extension == h)) {
-            //fprintf(stderr, "(%i, %i) D\n", i, j);
+            // fprintf(stderr, "%iD[%c%c]", j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'D', 1);
+            g = l - gap_extension == h;
             h = l;
             --i;
         } else if (u == n && (u - gap_open == h || u - gap_extension == h)) {
-            //fprintf(stderr, "(%i, %i) I\n", i, j);
+            // fprintf(stderr, "%iI[%c%c]", j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'I', 1);
+            g = u - gap_extension == h;
             h = u;
             --j;
         } else {
+            // fprintf(stderr, "%iS[%c%c]\n", j, ref[i], read[j]);
+            // fprintf(stderr, "i=%i,j=%i,n=%i,h=%i,d=%i,l=%i,u=%i\n", i, j, n, h, d, l, u);
             break;
         }
     }
 
     *score = h;
-
-    gssw_reverse_cigar(result);
     *refEnd = i;
     *readEnd = j;
+    *gap = g;
+    gssw_reverse_cigar(result);
     return result;
 }
 
@@ -936,6 +965,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
+                                            int32_t* gap,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
@@ -948,43 +978,62 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
     uint16_t* mH = (uint16_t*)alignment->mH;
     int32_t i = *refEnd;
     int32_t j = *readEnd;
+    int32_t g = *gap;
     // find maximum
     uint16_t h = mH[readLen*i + j];
-	gssw_cigar* result = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
+    gssw_cigar* result = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
     result->length = 0;
 
-    while (LIKELY(h != 0 && i >= 0 && j >= 0)) {
+    while (LIKELY(h > 0 && i >= 0 && j >= 0)) {
         // look at neighbors
-        int32_t d = 0, l = 0, u = 0;
+        int32_t d = -1, l = -1, u = -1;
         if (i > 0 && j > 0) {
             d = mH[readLen*(i-1) + (j-1)];
+            if (g || (d + match != h && d != h && d - mismatch != h)) {
+                d = -1;
+            }
         }
         if (i > 0) {
             l = mH[readLen*(i-1) + j];
+            if (l - gap_open != h && l - gap_extension != h) {
+                l = -1;
+            }
         }
         if (j > 0) {
             u = mH[readLen*i + (j-1)];
+            if (u - gap_open != h && u - gap_extension != h) {
+                u = -1;
+            }
         }
+
         // get the max of the three directions
         int32_t n = (l > u ? l : u);
-        n = (h > n ? h : n);
-        //fprintf(stderr, "word (%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
-        if (h == n &&
-            ((d + match == h && ref[i] == read[j])
-             || (d == h && (ref[i] == 'N' || read[j] == 'N'))
-             || (d - mismatch == h && ref[i] != read[j]))) {
-            //fprintf(stderr, "(%i, %i) M %c %c\n", i, j, ref[i], read[j]);
+        n = (d > n || (d + match == h && ref[i] == read[j]) ? d : n);
+        if (n == -1 && h == 2 && ref[i] == read[j]) {
+            n = 0;
+            d = 0;
+        }
+
+        if (d == n && !g && d + match == h && ref[i] == read[j]) {
             gssw_cigar_push_back(result, 'M', 1);
             h = d;
             --i; --j;
+        } else if (d == n && !g && d == h && (ref[i] == 'N' || read[j] == 'N')) {
+            gssw_cigar_push_back(result, 'N', 1);
+            h = d;
+            --i; --j;
+        } else if (d == n && !g && d - mismatch == h && ref[i] != read[j]) {
+            gssw_cigar_push_back(result, 'X', 1);
+            h = d;
+            --i; --j;
         } else if (l == n && (l - gap_open == h || l - gap_extension == h)) {
-            //fprintf(stderr, "(%i, %i) D\n", i, j);
             gssw_cigar_push_back(result, 'D', 1);
+            g = l - gap_extension == h;
             h = l;
             --i;
         } else if (u == n && (u - gap_open == h || u - gap_extension == h)) {
-            //fprintf(stderr, "(%i, %i) I\n", i, j);
             gssw_cigar_push_back(result, 'I', 1);
+            g = u - gap_extension == h;
             h = u;
             --j;
         } else {
@@ -993,10 +1042,10 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
     }
 
     *score = h;
-
-    gssw_reverse_cigar(result);
     *refEnd = i;
     *readEnd = j;
+    *gap = g;
+    gssw_reverse_cigar(result);
     return result;
 }
 
@@ -1027,20 +1076,20 @@ void gssw_graph_cigar_destroy(gssw_graph_cigar* g) {
     free(g->elements);
 }
 
-void gssw_print_graph_cigar(gssw_graph_cigar* g) {
+void gssw_print_graph_cigar(gssw_graph_cigar* g, FILE* out) {
     int32_t i;
     gssw_node_cigar* nc = g->elements;
     for (i = 0; i < g->length; ++i, ++nc) {
-        fprintf(stdout, "%u[", nc->node->id);
-        gssw_print_cigar(nc->cigar);
-        fprintf(stdout, "]");
+        fprintf(out, "%u[", nc->node->id);
+        gssw_print_cigar(nc->cigar, out);
+        fprintf(out, "]");
     }
-    fprintf(stdout, "\n");
+    fprintf(out, "\n");
 }
 
-void gssw_print_graph_mapping(gssw_graph_mapping* gm) {
-    fprintf(stdout, "%u@%i:", gm->score, gm->position);
-    gssw_print_graph_cigar(&gm->cigar);
+void gssw_print_graph_mapping(gssw_graph_mapping* gm, FILE* out) {
+    fprintf(out, "%i@%i:", gm->score, gm->position);
+    gssw_print_graph_cigar(&gm->cigar, out);
 }
 
 /*
@@ -1068,19 +1117,19 @@ char* gssw_graph_mapping_to_string(gssw_graph_mapping* gm) {
 */
 
 void gssw_reverse_graph_cigar(gssw_graph_cigar* c) {
-	gssw_graph_cigar* reversed = (gssw_graph_cigar*)malloc(sizeof(gssw_graph_cigar));
+    gssw_graph_cigar* reversed = (gssw_graph_cigar*)malloc(sizeof(gssw_graph_cigar));
     reversed->length = c->length;
-	reversed->elements = (gssw_node_cigar*) malloc(c->length * sizeof(gssw_node_cigar));
+    reversed->elements = (gssw_node_cigar*) malloc(c->length * sizeof(gssw_node_cigar));
     gssw_node_cigar* c1 = c->elements;
     gssw_node_cigar* c2 = reversed->elements;
-	int32_t s = 0;
-	int32_t e = c->length - 1;
-	while (LIKELY(s <= e)) {
-		c2[s] = c1[e];
-		c2[e] = c1[s];
-		++ s;
-		-- e;
-	}
+    int32_t s = 0;
+    int32_t e = c->length - 1;
+    while (LIKELY(s <= e)) {
+        c2[s] = c1[e];
+        c2[e] = c1[s];
+        ++ s;
+        -- e;
+    }
     free(c->elements);
     c->elements = reversed->elements;
     free(reversed);
@@ -1112,6 +1161,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
     uint8_t score_is_byte = gssw_is_byte(n->alignment);
     int32_t refEnd = n->alignment->ref_end1;
     int32_t readEnd = n->alignment->read_end1;
+    int32_t gap = 0;
     //fprintf(stderr, "ref_end1 %i read_end1 %i\n", refEnd, readEnd);
 
     // node cigar
@@ -1139,6 +1189,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                                &score,
                                                &refEnd,
                                                &readEnd,
+                                               &gap,
                                                n->seq,
                                                n->len,
                                                read,
@@ -1156,9 +1207,13 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         nc->node = n;
         ++gc->length;
         //fprintf(stderr, "score is %u as we end node %p %u at position %i in read and %i in ref\n", score, n, n->id, readEnd, refEnd);
-        if (score == 0 || refEnd > 0) {
+        if (score != 0 && refEnd > 0) {
+            gm->score = -1;
+            break;
+        }
+        if (score == 0) {
+            //fprintf(stderr, "soft clipping %i\n", readEnd+1);
             if (readEnd > -1) {
-                //fprintf(stderr, "soft clipping %i\n", readEnd+1);
                 gssw_cigar_push_front(nc->cigar, 'S', readEnd+1);
             }
             break;
@@ -1189,20 +1244,17 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         if (score_is_byte) {
             for (i = 0; i < n->count_prev; ++i) {
                 gssw_node* cn = n->prev[i];
-                l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-                /*
-                char t = cn->seq[cn->len-1];
-                char q = read[readEnd-1];
-                fprintf(stderr, "score=%i t=%c q=%c d=%i l=%i h=%i max_score=%i id=%i\n",
-                        score, t, q, d, l, score, max_score, cn->id);
-                */
-                bool possible_gap = (score + gap_extension == l || score + gap_open == l);
-                if ((!possible_gap || d >= l) && d > max_score) {
+                l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
+                char x = n->seq[refEnd];
+                char y = read[readEnd];
+                bool possible_diag = !gap && ((d + match == score && x == y) || (d - mismatch == score && x != y) || (d == score && (x == 'N' || y == 'N')));
+                bool possible_gap = (l - gap_open == score) || (l - gap_extension == score);
+                if (possible_diag && (!possible_gap || d > l || (d + match == score && x == y)) && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > d && l > max_score && possible_gap) {
+                } else if (possible_gap && (!possible_diag || l >= d) && l > max_score) {
                     max_score = l;
                     max_prev = cn;
                     max_diag = 0;
@@ -1211,14 +1263,17 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         } else {
             for (i = 0; i < n->count_prev; ++i) {
                 gssw_node* cn = n->prev[i];
-                l = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-                bool possible_gap = (score + gap_extension == l || score + gap_open == l);
-                if ((!possible_gap || d >= l) && d > max_score) {
+                l = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
+                char x = n->seq[refEnd];
+                char y = read[readEnd];
+                bool possible_diag = !gap && ((d + match == score && x == y) || (d - mismatch == score && x != y) || (d == score && (x == 'N' || y == 'N')));
+                bool possible_gap = (l - gap_open == score) || (l - gap_extension == score);
+                if (possible_diag && (!possible_gap || d > l || (d + match == score && x == y)) && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > d && l > max_score && possible_gap) {
+                } else if (possible_gap && (!possible_diag || l >= d) && l > max_score) {
                     max_score = l;
                     max_prev = cn;
                     max_diag = 0;
@@ -1233,21 +1288,34 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         // go to ending position, look at neighbors across all inbound nodes
         //fprintf(stderr, "max_prev = %p, node = %p\n", max_prev, n);
         if (max_prev) {
-            n = max_prev;
-            // update ref end repeat
-            refEnd = n->len - 1;
             if (max_diag) {
+                char x = n->seq[refEnd];
+                char y = read[readEnd];
+                if (!gap && max_score + match == score && x == y) {
+                    gssw_cigar_push_back(nc->cigar, 'M', 1);
+                } else if (!gap && max_score == score && (x == 'N' || y == 'N')) {
+                    gssw_cigar_push_back(nc->cigar, 'N', 1);
+                } else if (!gap && max_score - mismatch == score && x != y) {
+                    gssw_cigar_push_back(nc->cigar, 'X', 1);
+                } else {
+                    fprintf(stderr, "Invalid!\n");
+                }
                 --readEnd;
-                //fprintf(stderr, "M\n");
-                gssw_cigar_push_front(nc->cigar, 'M', 1);
             } else {
                 //fprintf(stderr, "D\n");
                 gssw_cigar_push_front(nc->cigar, 'D', 1);
+                gap = max_score - gap_extension == score;
             }
+            score = max_score;
+            n = max_prev;
+            // update ref end repeat
+            refEnd = n->len - 1;
             ++nc;
         } else {
             //fprintf(stderr, "soft clip of %i\n", readEnd+1);
-            gssw_cigar_push_front(nc->cigar, 'S', readEnd+1);
+            if (readEnd > -1) {
+                gssw_cigar_push_front(nc->cigar, 'S', readEnd+1);
+            }
             break;
         }
 
@@ -1314,30 +1382,30 @@ void gssw_cigar_push_front(gssw_cigar* c, char type, uint32_t length) {
 
 void gssw_reverse_cigar(gssw_cigar* c) {
     if (!c->length) return; // bail out
-	gssw_cigar* reversed = (gssw_cigar*)malloc(sizeof(gssw_cigar));
+    gssw_cigar* reversed = (gssw_cigar*)malloc(sizeof(gssw_cigar));
     reversed->length = c->length;
-	reversed->elements = (gssw_cigar_element*) malloc(c->length * sizeof(gssw_cigar_element));
+    reversed->elements = (gssw_cigar_element*) malloc(c->length * sizeof(gssw_cigar_element));
     gssw_cigar_element* c1 = c->elements;
     gssw_cigar_element* c2 = reversed->elements;
-	int32_t s = 0;
-	int32_t e = c->length - 1;
-	while (LIKELY(s <= e)) {
-		c2[s] = c1[e];
-		c2[e] = c1[s];
-		++ s;
-		-- e;
-	}
+    int32_t s = 0;
+    int32_t e = c->length - 1;
+    while (LIKELY(s <= e)) {
+        c2[s] = c1[e];
+        c2[e] = c1[s];
+        ++ s;
+        -- e;
+    }
     free(c->elements);
     c->elements = reversed->elements;
     free(reversed);
 }
 
-void gssw_print_cigar(gssw_cigar* c) {
+void gssw_print_cigar(gssw_cigar* c, FILE* out) {
     int i;
     int l = c->length;
     gssw_cigar_element* e = c->elements;
     for (i=0; LIKELY(i < l); ++i, ++e) {
-        printf("%i%c", e->length, e->type);
+        fprintf(out, "%i%c", e->length, e->type);
     }
 }
 
@@ -1491,7 +1559,7 @@ gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t coun
     }
 
     __m128i vZero = _mm_set1_epi32(0);
-	int32_t segLen = (readLen + 15) / 16;
+    int32_t segLen = (readLen + 15) / 16;
     gssw_seed* seed = (gssw_seed*)calloc(1, sizeof(gssw_seed));
     if (!(!posix_memalign((void**)&seed->pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&seed->pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
@@ -1519,7 +1587,7 @@ gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t coun
 gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t count) {
     int32_t j = 0, k = 0;
     __m128i vZero = _mm_set1_epi32(0);
-	int32_t segLen = (readLen + 7) / 8;
+    int32_t segLen = (readLen + 7) / 8;
     gssw_seed* seed = (gssw_seed*)calloc(1, sizeof(gssw_seed));
     if (!(!posix_memalign((void**)&seed->pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&seed->pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
@@ -1557,7 +1625,7 @@ gssw_graph_fill (gssw_graph* graph,
 
     int32_t read_length = strlen(read_seq);
     int8_t* read_num = gssw_create_num(read_seq, read_length, nt_table);
-	gssw_profile* prof = gssw_init(read_num, read_length, score_matrix, 5, score_size);
+    gssw_profile* prof = gssw_init(read_num, read_length, score_matrix, 5, score_size);
     gssw_seed* seed = NULL;
     uint16_t max_score = 0;
 
@@ -1608,8 +1676,8 @@ gssw_node_fill (gssw_node* node,
                 const int32_t maskLen,
                 const gssw_seed* seed) {
 
-	gssw_alignment_end* bests = NULL;
-	int32_t readLen = prof->readLen;
+    gssw_alignment_end* bests = NULL;
+    int32_t readLen = prof->readLen;
 
     //alignment_end* best = (alignment_end*)calloc(1, sizeof(alignment_end));
     gssw_align* alignment = node->alignment;
@@ -1630,34 +1698,34 @@ gssw_node_fill (gssw_node* node,
     // to decrease code complexity, we assume the same stripe size for the entire graph
     // this is ensured by changing the stripe size for the entire graph in graph_fill if any node scores >= 255
 
-	// Find the alignment scores and ending positions
-	if (prof->profile_byte) {
-		bests = gssw_sw_sse2_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
-		if (bests[0].score == 255) {
-			free(bests);
+    // Find the alignment scores and ending positions
+    if (prof->profile_byte) {
+        bests = gssw_sw_sse2_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
+        if (bests[0].score == 255) {
+            free(bests);
             gssw_align_clear_matrix_and_seed(alignment);
             return 0; // re-run from external context
-		}
-	} else if (prof->profile_word) {
+        }
+    } else if (prof->profile_word) {
         bests = gssw_sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen, alignment, seed);
     } else {
-		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
-		return 0;
-	}
+        fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
+        return 0;
+    }
 
-	alignment->score1 = bests[0].score;
-	alignment->ref_end1 = bests[0].ref;
-	alignment->read_end1 = bests[0].read;
-	if (maskLen >= 15) {
-		alignment->score2 = bests[1].score;
-		alignment->ref_end2 = bests[1].ref;
-	} else {
-	    alignment->score2 = 0;
-		alignment->ref_end2 = -1;
-	}
-	free(bests);
+    alignment->score1 = bests[0].score;
+    alignment->ref_end1 = bests[0].ref;
+    alignment->read_end1 = bests[0].read;
+    if (maskLen >= 15) {
+        alignment->score2 = bests[1].score;
+        alignment->ref_end2 = bests[1].ref;
+    } else {
+        alignment->score2 = 0;
+        alignment->ref_end2 = -1;
+    }
+    free(bests);
 
-	return node;
+    return node;
 
 }
 
@@ -1670,6 +1738,10 @@ gssw_graph* gssw_graph_create(uint32_t size) {
 
 void gssw_graph_clear_alignment(gssw_graph* g) {
     g->max_node = NULL;
+    uint32_t i;
+    for (i = 0; i < g->size; ++i) {
+        gssw_node_clear_alignment(g->nodes[i]);
+    }
 }
 
 void gssw_graph_destroy(gssw_graph* g) {
@@ -1701,40 +1773,40 @@ int8_t* gssw_create_num(const char* seq,
                         const int8_t* nt_table) {
     int32_t m;
     int8_t* num = (int8_t*)malloc(len);
-	for (m = 0; m < len; ++m) num[m] = nt_table[(int)seq[m]];
+    for (m = 0; m < len; ++m) num[m] = nt_table[(int)seq[m]];
     return num;
 }
 
 int8_t* gssw_create_score_matrix(int32_t match, int32_t mismatch) {
-	// initialize scoring matrix for genome sequences
-	//  A  C  G  T	N (or other ambiguous code)
-	//  2 -2 -2 -2 	0	A
-	// -2  2 -2 -2 	0	C
-	// -2 -2  2 -2 	0	G
-	// -2 -2 -2  2 	0	T
-	//	0  0  0  0  0	N (or other ambiguous code)
+    // initialize scoring matrix for genome sequences
+    //  A  C  G  T  N (or other ambiguous code)
+    //  2 -2 -2 -2  0  A
+    // -2  2 -2 -2  0  C
+    // -2 -2  2 -2  0  G
+    // -2 -2 -2  2  0  T
+    //  0  0  0  0  0  N (or other ambiguous code)
     int32_t l, k, m;
-	int8_t* mat = (int8_t*)calloc(25, sizeof(int8_t));
-	for (l = k = 0; l < 4; ++l) {
-		for (m = 0; m < 4; ++m) mat[k++] = l == m ? match : - mismatch;	/* weight_match : -weight_mismatch */
-		mat[k++] = 0; // ambiguous base: no penalty
-	}
-	for (m = 0; m < 5; ++m) mat[k++] = 0;
+    int8_t* mat = (int8_t*)calloc(25, sizeof(int8_t));
+    for (l = k = 0; l < 4; ++l) {
+        for (m = 0; m < 4; ++m) mat[k++] = l == m ? match : - mismatch; /* weight_match : -weight_mismatch */
+        mat[k++] = 0; // ambiguous base: no penalty
+    }
+    for (m = 0; m < 5; ++m) mat[k++] = 0;
     return mat;
 }
 
 int8_t* gssw_create_nt_table(void) {
     int8_t* ret_nt_table = calloc(128, sizeof(int8_t));
     int8_t nt_table[128] = {
-		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
-		4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
-	};
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
+    };
     memcpy(ret_nt_table, nt_table, 128*sizeof(int8_t));
     return ret_nt_table;
 }
