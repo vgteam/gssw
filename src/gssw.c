@@ -821,6 +821,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        uint16_t* score,
                                        int32_t* refEnd,
                                        int32_t* readEnd,
+                                       int32_t* gap,
                                        const char* ref,
                                        int32_t refLen,
                                        const char* read,
@@ -834,6 +835,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                               score,
                                               refEnd,
                                               readEnd,
+                                              gap,
                                               ref,
                                               refLen,
                                               read,
@@ -847,6 +849,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                               score,
                                               refEnd,
                                               readEnd,
+                                              gap,
                                               ref,
                                               refLen,
                                               read,
@@ -862,6 +865,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
+                                            int32_t* gap,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
@@ -874,57 +878,82 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
     uint8_t* mH = (uint8_t*)alignment->mH;
     int32_t i = *refEnd;
     int32_t j = *readEnd;
+    int32_t g = *gap;
     // find maximum
     uint8_t h = mH[readLen*i + j];
 	gssw_cigar* result = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
     result->length = 0;
 
-    while (LIKELY(h != 0 && i >= 0 && j >= 0)) {
+    while (LIKELY(h > 0 && i >= 0 && j >= 0)) {
         // look at neighbors
-        int32_t d = 0, l = 0, u = 0;
+        int32_t d = -1, l = -1, u = -1;
         if (i > 0 && j > 0) {
             d = mH[readLen*(i-1) + (j-1)];
+            if (g || (d + match != h && d != h && d - mismatch != h)) {
+                d = -1;
+            }
         }
         if (i > 0) {
             l = mH[readLen*(i-1) + j];
+            if (l - gap_open != h && l - gap_extension != h) {
+                l = -1;
+            }
         }
         if (j > 0) {
             u = mH[readLen*i + (j-1)];
+            if (u - gap_open != h && u - gap_extension != h) {
+                u = -1;
+            }
         }
 
         // get the max of the three directions
         int32_t n = (l > u ? l : u);
-        n = (h > n ? h : n);
+        n = (d > n || (d + match == h && ref[i] == read[j]) ? d : n);
+        if (n == -1 && h == 2 && ref[i] == read[j]) {
+            n = 0;
+            d = 0;
+        }
         //fprintf(stderr, "byte (%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
 
-        if (h == n &&
-            ((d + match == h && ref[i] == read[j])
-             || (d == h && (ref[i] == 'N' || read[j] == 'N'))
-             || (d - mismatch == h && ref[i] != read[j]))) {
-            //fprintf(stderr, "(%i, %i) M %c %c\n", i, j, ref[i], read[j]);
+        if (d == n && !g && d + match == h && ref[i] == read[j]) {
+            // fprintf(stderr, "%iM[%c%c]", j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'M', 1);
             h = d;
             --i; --j;
+        } else if (d == n && !g && d == h && (ref[i] == 'N' || read[j] == 'N')) {
+            // fprintf(stderr, "%iN[%c%c]", j, ref[i], read[j]);
+            gssw_cigar_push_back(result, 'N', 1);
+            h = d;
+            --i; --j;
+        } else if (d == n && !g && d - mismatch == h && ref[i] != read[j]) {
+            // fprintf(stderr, "%iX[%c%c]", j, ref[i], read[j]);
+            gssw_cigar_push_back(result, 'X', 1);
+            h = d;
+            --i; --j;
         } else if (l == n && (l - gap_open == h || l - gap_extension == h)) {
-            //fprintf(stderr, "(%i, %i) D\n", i, j);
+            // fprintf(stderr, "%iD[%c%c]", j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'D', 1);
+            g = l - gap_extension == h;
             h = l;
             --i;
         } else if (u == n && (u - gap_open == h || u - gap_extension == h)) {
-            //fprintf(stderr, "(%i, %i) I\n", i, j);
+            // fprintf(stderr, "%iI[%c%c]", j, ref[i], read[j]);
             gssw_cigar_push_back(result, 'I', 1);
+            g = u - gap_extension == h;
             h = u;
             --j;
         } else {
+            // fprintf(stderr, "%iS[%c%c]\n", j, ref[i], read[j]);
+            // fprintf(stderr, "i=%i,j=%i,n=%i,h=%i,d=%i,l=%i,u=%i\n", i, j, n, h, d, l, u);
             break;
         }
     }
 
     *score = h;
-
-    gssw_reverse_cigar(result);
     *refEnd = i;
     *readEnd = j;
+    *gap = g;
+    gssw_reverse_cigar(result);
     return result;
 }
 
@@ -936,6 +965,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
+                                            int32_t* gap,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
@@ -948,43 +978,62 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
     uint16_t* mH = (uint16_t*)alignment->mH;
     int32_t i = *refEnd;
     int32_t j = *readEnd;
+    int32_t g = *gap;
     // find maximum
     uint16_t h = mH[readLen*i + j];
 	gssw_cigar* result = (gssw_cigar*)calloc(1, sizeof(gssw_cigar));
     result->length = 0;
 
-    while (LIKELY(h != 0 && i >= 0 && j >= 0)) {
+    while (LIKELY(h > 0 && i >= 0 && j >= 0)) {
         // look at neighbors
-        int32_t d = 0, l = 0, u = 0;
+        int32_t d = -1, l = -1, u = -1;
         if (i > 0 && j > 0) {
             d = mH[readLen*(i-1) + (j-1)];
+            if (g || (d + match != h && d != h && d - mismatch != h)) {
+                d = -1;
+            }
         }
         if (i > 0) {
             l = mH[readLen*(i-1) + j];
+            if (l - gap_open != h && l - gap_extension != h) {
+                l = -1;
+            }
         }
         if (j > 0) {
             u = mH[readLen*i + (j-1)];
+            if (u - gap_open != h && u - gap_extension != h) {
+                u = -1;
         }
+        }
+
         // get the max of the three directions
         int32_t n = (l > u ? l : u);
-        n = (h > n ? h : n);
-        //fprintf(stderr, "word (%i, %i) h=%i d=%i l=%i u=%i n=%i\n", i, j, h, d, l, u, n);
-        if (h == n &&
-            ((d + match == h && ref[i] == read[j])
-             || (d == h && (ref[i] == 'N' || read[j] == 'N'))
-             || (d - mismatch == h && ref[i] != read[j]))) {
-            //fprintf(stderr, "(%i, %i) M %c %c\n", i, j, ref[i], read[j]);
+        n = (d > n || (d + match == h && ref[i] == read[j]) ? d : n);
+        if (n == -1 && h == 2 && ref[i] == read[j]) {
+            n = 0;
+            d = 0;
+        }
+
+        if (d == n && !g && d + match == h && ref[i] == read[j]) {
             gssw_cigar_push_back(result, 'M', 1);
             h = d;
             --i; --j;
+        } else if (d == n && !g && d == h && (ref[i] == 'N' || read[j] == 'N')) {
+            gssw_cigar_push_back(result, 'N', 1);
+            h = d;
+            --i; --j;
+        } else if (d == n && !g && d - mismatch == h && ref[i] != read[j]) {
+            gssw_cigar_push_back(result, 'X', 1);
+            h = d;
+            --i; --j;
         } else if (l == n && (l - gap_open == h || l - gap_extension == h)) {
-            //fprintf(stderr, "(%i, %i) D\n", i, j);
             gssw_cigar_push_back(result, 'D', 1);
+            g = l - gap_extension == h;
             h = l;
             --i;
         } else if (u == n && (u - gap_open == h || u - gap_extension == h)) {
-            //fprintf(stderr, "(%i, %i) I\n", i, j);
             gssw_cigar_push_back(result, 'I', 1);
+            g = u - gap_extension == h;
             h = u;
             --j;
         } else {
@@ -993,10 +1042,10 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
     }
 
     *score = h;
-
-    gssw_reverse_cigar(result);
     *refEnd = i;
     *readEnd = j;
+    *gap = g;
+    gssw_reverse_cigar(result);
     return result;
 }
 
@@ -1027,20 +1076,20 @@ void gssw_graph_cigar_destroy(gssw_graph_cigar* g) {
     free(g->elements);
 }
 
-void gssw_print_graph_cigar(gssw_graph_cigar* g) {
+void gssw_print_graph_cigar(gssw_graph_cigar* g, FILE* out) {
     int32_t i;
     gssw_node_cigar* nc = g->elements;
     for (i = 0; i < g->length; ++i, ++nc) {
-        fprintf(stdout, "%u[", nc->node->id);
-        gssw_print_cigar(nc->cigar);
-        fprintf(stdout, "]");
+        fprintf(out, "%u[", nc->node->id);
+        gssw_print_cigar(nc->cigar, out);
+        fprintf(out, "]");
     }
-    fprintf(stdout, "\n");
+    fprintf(out, "\n");
 }
 
-void gssw_print_graph_mapping(gssw_graph_mapping* gm) {
-    fprintf(stdout, "%u@%i:", gm->score, gm->position);
-    gssw_print_graph_cigar(&gm->cigar);
+void gssw_print_graph_mapping(gssw_graph_mapping* gm, FILE* out) {
+    fprintf(out, "%i@%i:", gm->score, gm->position);
+    gssw_print_graph_cigar(&gm->cigar, out);
 }
 
 /*
@@ -1112,6 +1161,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
     uint8_t score_is_byte = gssw_is_byte(n->alignment);
     int32_t refEnd = n->alignment->ref_end1;
     int32_t readEnd = n->alignment->read_end1;
+    int32_t gap = 0;
     //fprintf(stderr, "ref_end1 %i read_end1 %i\n", refEnd, readEnd);
 
     // node cigar
@@ -1139,6 +1189,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                                &score,
                                                &refEnd,
                                                &readEnd,
+                                               &gap,
                                                n->seq,
                                                n->len,
                                                read,
@@ -1156,9 +1207,13 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         nc->node = n;
         ++gc->length;
         //fprintf(stderr, "score is %u as we end node %p %u at position %i in read and %i in ref\n", score, n, n->id, readEnd, refEnd);
-        if (score == 0 || refEnd > 0) {
-            if (readEnd > -1) {
+        if (score != 0 && refEnd > 0) {
+            gm->score = -1;
+            break;
+        }
+        if (score == 0) {
                 //fprintf(stderr, "soft clipping %i\n", readEnd+1);
+            if (readEnd > -1) {
                 gssw_cigar_push_front(nc->cigar, 'S', readEnd+1);
             }
             break;
@@ -1189,20 +1244,17 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         if (score_is_byte) {
             for (i = 0; i < n->count_prev; ++i) {
                 gssw_node* cn = n->prev[i];
-                l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-                /*
-                char t = cn->seq[cn->len-1];
-                char q = read[readEnd-1];
-                fprintf(stderr, "score=%i t=%c q=%c d=%i l=%i h=%i max_score=%i id=%i\n",
-                        score, t, q, d, l, score, max_score, cn->id);
-                */
-                bool possible_gap = (score + gap_extension == l || score + gap_open == l);
-                if ((!possible_gap || d >= l) && d > max_score) {
+                l = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
+                char x = n->seq[refEnd];
+                char y = read[readEnd];
+                bool possible_diag = !gap && ((d + match == score && x == y) || (d - mismatch == score && x != y) || (d == score && (x == 'N' || y == 'N')));
+                bool possible_gap = (l - gap_open == score) || (l - gap_extension == score);
+                if (possible_diag && (!possible_gap || d > l || (d + match == score && x == y)) && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > d && l > max_score && possible_gap) {
+                } else if (possible_gap && (!possible_diag || l >= d) && l > max_score) {
                     max_score = l;
                     max_prev = cn;
                     max_diag = 0;
@@ -1211,14 +1263,17 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         } else {
             for (i = 0; i < n->count_prev; ++i) {
                 gssw_node* cn = n->prev[i];
-                l = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
                 d = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
-                bool possible_gap = (score + gap_extension == l || score + gap_open == l);
-                if ((!possible_gap || d >= l) && d > max_score) {
+                l = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + readEnd];
+                char x = n->seq[refEnd];
+                char y = read[readEnd];
+                bool possible_diag = !gap && ((d + match == score && x == y) || (d - mismatch == score && x != y) || (d == score && (x == 'N' || y == 'N')));
+                bool possible_gap = (l - gap_open == score) || (l - gap_extension == score);
+                if (possible_diag && (!possible_gap || d > l || (d + match == score && x == y)) && d > max_score) {
                     max_score = d;
                     max_prev = cn;
                     max_diag = 1;
-                } else if (l > d && l > max_score && possible_gap) {
+                } else if (possible_gap && (!possible_diag || l >= d) && l > max_score) {
                     max_score = l;
                     max_prev = cn;
                     max_diag = 0;
@@ -1233,21 +1288,34 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
         // go to ending position, look at neighbors across all inbound nodes
         //fprintf(stderr, "max_prev = %p, node = %p\n", max_prev, n);
         if (max_prev) {
-            n = max_prev;
-            // update ref end repeat
-            refEnd = n->len - 1;
             if (max_diag) {
+                char x = n->seq[refEnd];
+                char y = read[readEnd];
+                if (!gap && max_score + match == score && x == y) {
+                    gssw_cigar_push_back(nc->cigar, 'M', 1);
+                } else if (!gap && max_score == score && (x == 'N' || y == 'N')) {
+                    gssw_cigar_push_back(nc->cigar, 'N', 1);
+                } else if (!gap && max_score - mismatch == score && x != y) {
+                    gssw_cigar_push_back(nc->cigar, 'X', 1);
+                } else {
+                    fprintf(stderr, "Invalid!\n");
+                }
                 --readEnd;
-                //fprintf(stderr, "M\n");
-                gssw_cigar_push_front(nc->cigar, 'M', 1);
             } else {
                 //fprintf(stderr, "D\n");
                 gssw_cigar_push_front(nc->cigar, 'D', 1);
+                gap = max_score - gap_extension == score;
             }
+            score = max_score;
+            n = max_prev;
+            // update ref end repeat
+            refEnd = n->len - 1;
             ++nc;
         } else {
             //fprintf(stderr, "soft clip of %i\n", readEnd+1);
+            if (readEnd > -1) {
             gssw_cigar_push_front(nc->cigar, 'S', readEnd+1);
+            }
             break;
         }
 
@@ -1332,12 +1400,12 @@ void gssw_reverse_cigar(gssw_cigar* c) {
     free(reversed);
 }
 
-void gssw_print_cigar(gssw_cigar* c) {
+void gssw_print_cigar(gssw_cigar* c, FILE* out) {
     int i;
     int l = c->length;
     gssw_cigar_element* e = c->elements;
     for (i=0; LIKELY(i < l); ++i, ++e) {
-        printf("%i%c", e->length, e->type);
+        fprintf(out, "%i%c", e->length, e->type);
     }
 }
 
@@ -1670,6 +1738,10 @@ gssw_graph* gssw_graph_create(uint32_t size) {
 
 void gssw_graph_clear_alignment(gssw_graph* g) {
     g->max_node = NULL;
+    uint32_t i;
+    for (i = 0; i < g->size; ++i) {
+        gssw_node_clear_alignment(g->nodes[i]);
+    }
 }
 
 void gssw_graph_destroy(gssw_graph* g) {

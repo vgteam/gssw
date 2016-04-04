@@ -285,6 +285,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
+                                            int32_t* gap,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
@@ -298,6 +299,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
+                                            int32_t* gap,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
@@ -311,6 +313,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        uint16_t* score,
                                        int32_t* refEnd,
                                        int32_t* readEnd,
+                                       int32_t* gap,
                                        const char* ref,
                                        int32_t refLen,
                                        const char* read,
@@ -348,7 +351,7 @@ gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t coun
 void gssw_cigar_push_back(gssw_cigar* c, char type, uint32_t length);
 void gssw_cigar_push_front(gssw_cigar* c, char type, uint32_t length);
 void gssw_reverse_cigar(gssw_cigar* c);
-void gssw_print_cigar(gssw_cigar* c);
+void gssw_print_cigar(gssw_cigar* c, FILE* out);
 void gssw_cigar_destroy(gssw_cigar* c);
 
 gssw_node* gssw_node_create(void* data,
@@ -399,8 +402,8 @@ gssw_graph_mapping* gssw_graph_mapping_create(void);
 void gssw_graph_mapping_destroy(gssw_graph_mapping* m);
 gssw_graph_cigar* gssw_graph_cigar_create(void);
 void gssw_graph_cigar_destroy(gssw_graph_cigar* g);
-void gssw_print_graph_cigar(gssw_graph_cigar* g);
-void gssw_print_graph_mapping(gssw_graph_mapping* gm);
+void gssw_print_graph_cigar(gssw_graph_cigar* g, FILE* out);
+void gssw_print_graph_mapping(gssw_graph_mapping* gm, FILE* out);
 //void gssw_graph_cigar_to_string(gssw_graph_cigar* g);
 //void gssw_graph_mapping_to_string(gssw_graph_mapping* gm);
 

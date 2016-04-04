@@ -68,7 +68,7 @@ int main (int argc, char * const argv[]) {
                                                     gap_open,
                                                     gap_extension);
 
-    gssw_print_graph_mapping(gm);
+    gssw_print_graph_mapping(gm, stdout);
     gssw_graph_mapping_destroy(gm);
     // note that nodes which are referred to in this graph are destroyed as well
     gssw_graph_destroy(graph);
