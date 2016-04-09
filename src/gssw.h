@@ -22,6 +22,47 @@
 struct gssw_profile;
 typedef struct gssw_profile gssw_profile;
 
+// This file makes extensive use of SSE intrinsics, which operate on 128-bit
+// values. These values are stored in the 128-bit special registers XMM0 through
+// XMM7, as assigned by the compiler. In C, these values have type "__m128i",
+// with the "i" meaning integer (because we do integer math on them). We have
+// code to use these in alignments, either to store 16 single-byte values or 8
+// double-byte values, depending on how large we're allowing the scores to get.
+
+// We use j for indexes in the read (or "query"), and i for indexes in the
+// reference (or "database"). Conceptually, the database runs rightwards along
+// the top of the DP matrix, and the read runs downwards along the left.
+
+// Note that this usage of i and j is BACKWARDS from the paper!
+
+// Within each node, we perform a standard-ish Smith-Waterman alignment with
+// affine gaps. This involves three matrices. H[i, j] gives the score of the
+// very best alignment using read characters through j and reference characters
+// through i, no matter what it ends in (match, mismatch, or gap). We also have
+// E[i, j] which gives the score of the best such alignment ending in a gap in
+// the read, and F[i, j], which give sthe score of the best such alignment
+// ending in a gap in the reference.
+
+// During alignment, we work on one column (i.e. reference character) of all the
+// DP matrices at a time. This column is *not* divided top to bottom into SSE
+// vectors. Instead, the column is broken up across SSE vectors in a "striped"
+// format, as follows:
+
+// Take the read, and break it into 16 (or 8 for word-scored alignment) equal-
+// length pieces, padding if necessary. Line those pieces up left to right. Then
+// run through *that* matrix in rows. Each row is an SSE 128-bit chunk, and is
+// processed all at once.
+
+// Another way to think of the layout is to have 16 or 8 cursors moving down the
+// column in parallel. Each cursor has easy access to the contents of the cell
+// above it, except for the first one (which is fixed with some fix-up logic
+// called the "lazy F loop").
+
+// Each node has a notion of a "seed", which carries the E information (about
+// gaps in the read that can continue through the node boundary) and the H
+// information (about the best alignments overall before we entered this node's
+// matrix). F information is not carried over, because gaps in the reference
+// can't span multiple reference nodes.
 typedef struct {
     __m128i* pvE;
     __m128i* pvHStore;
@@ -38,9 +79,6 @@ typedef struct {
 						position is not available
 	@field	read_end1	0-based best alignment ending position on read
 	@field	read_end2	0-based sub-optimal alignment ending position on read
-	@field	cigar	best alignment cigar; stored the same as that in BAM format, high 28 bits: length, low 4 bits: M/I/D (0/1/2);
-					cigar = 0 when the best alignment path is not available
-	@field	cigarLen	length of the cigar string; cigarLen = 0 when the best alignment path is not available
 */
 typedef struct {
 	uint16_t score1;
@@ -50,9 +88,27 @@ typedef struct {
 	int32_t	read_begin1;
 	int32_t read_end1;
 	int32_t ref_end2;
+	// We need the seed information about H and E, which we get from the possible
+	// previous nodes.
     gssw_seed seed;
+    // This stores 1 if we did the alignment with byte scores, in which case the
+    // matrix pointers below should point to an matrices composed of bytes. If
+    // it is 0, the matrices are composed of 2-byte values.
     uint8_t is_byte;
+    
+    // We keep de-striped versions of all the alignment matrices, to allow
+    // traceback.
+    
+    // Pointer to the H matrix for the alignment, which holds, at each position,
+    // the score of the best alignment of the corresponding substrings, no
+    // matter what it ends with.
     void* mH;
+    // Pointer to the E matrix for the alignment, which holds scores for
+    // alignments ending with gaps in the read.
+    void* mE;
+    // Pointer to the F matrix, which holds scores for alignments ending with
+    // gaps in the reference.
+    void* mF;
 } gssw_align;
 
 typedef struct {
@@ -61,18 +117,26 @@ typedef struct {
 	int32_t read;    //alignment ending position on read, 0-based
 } gssw_alignment_end;
 
+// A CIGAR element is a number of repetitions of a CIGAR operation.
 typedef struct {
     char type;
     uint32_t length;
 } gssw_cigar_element;
 
+// A CIGAR is an array of elements.
 typedef struct {
     int32_t length;
     gssw_cigar_element* elements;
 } gssw_cigar;
 
+// A profile is a sort of exploded score matrix. We fill a whole read by
+// reference matrix with the score you would get by matching a particular
+// character in the read with a particular character in the reference. There's
+// no data dependence between any entries, so we can just fill this in.
 struct gssw_profile{
+    // We keep one version, stored striped, for byte-sized alignment
 	__m128i* profile_byte;	// 0: none
+	// And another for word-sized alignment.
 	__m128i* profile_word;	// 0: none
 	const int8_t* read;
 	const int8_t* mat;
@@ -257,7 +321,7 @@ gssw_align* gssw_ssw_fill (const gssw_profile* prof,
 */
 void gssw_align_destroy (gssw_align* a);
 
-/*!	@function	Release the memory allocated for mH and pvE in s_align.
+/*!	@function	Release the memory allocated for matrices and pvE in s_align.
 	@param	a	pointer to the alignment result structure
 */
 void gssw_align_clear_matrix_and_seed (gssw_align* a);
@@ -285,6 +349,8 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
+                                            int32_t* refGapFlag,
+                                            int32_t* readGapFlag,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
@@ -298,6 +364,8 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
+                                            int32_t* refGapFlag,
+                                            int32_t* readGapFlag,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
@@ -311,6 +379,8 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        uint16_t* score,
                                        int32_t* refEnd,
                                        int32_t* readEnd,
+                                       int32_t* refGapFlag,
+                                       int32_t* readGapFlag,
                                        const char* ref,
                                        int32_t refLen,
                                        const char* read,
@@ -320,6 +390,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        int32_t gap_open,
                                        int32_t gap_extension);
 
+// Compute and return the traceback from a graph for which the alignment DP has been performed.
 gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                            const char* read,
                                            int32_t readLen,
@@ -348,7 +419,7 @@ gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t coun
 void gssw_cigar_push_back(gssw_cigar* c, char type, uint32_t length);
 void gssw_cigar_push_front(gssw_cigar* c, char type, uint32_t length);
 void gssw_reverse_cigar(gssw_cigar* c);
-void gssw_print_cigar(gssw_cigar* c);
+void gssw_print_cigar(gssw_cigar* c, FILE* out);
 void gssw_cigar_destroy(gssw_cigar* c);
 
 gssw_node* gssw_node_create(void* data,
@@ -399,8 +470,8 @@ gssw_graph_mapping* gssw_graph_mapping_create(void);
 void gssw_graph_mapping_destroy(gssw_graph_mapping* m);
 gssw_graph_cigar* gssw_graph_cigar_create(void);
 void gssw_graph_cigar_destroy(gssw_graph_cigar* g);
-void gssw_print_graph_cigar(gssw_graph_cigar* g);
-void gssw_print_graph_mapping(gssw_graph_mapping* gm);
+void gssw_print_graph_cigar(gssw_graph_cigar* g, FILE* out);
+void gssw_print_graph_mapping(gssw_graph_mapping* gm, FILE* out);
 //void gssw_graph_cigar_to_string(gssw_graph_cigar* g);
 //void gssw_graph_mapping_to_string(gssw_graph_mapping* gm);
 
