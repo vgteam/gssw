@@ -67,6 +67,350 @@
  */
 #define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
 
+/* Rounds a double to nearest int8_t. */
+int8_t round8_t(double x) {
+    int8_t int_x = (int8_t) x;
+    if (x >= 0.0) {
+        if (x - int_x >= 0.5) {
+            return int_x + (int8_t) 1;
+        }
+        else {
+            return int_x;
+        }
+    }
+    else {
+        if (int_x - x >= 0.5) {
+            return int_x - (int8_t) 1;
+        }
+        else {
+            return int_x;
+        }
+    }
+}
+
+/* Simple (slow) algorithm for finding greatest common factor of the scores, not performance critical. */
+int8_t score_gcf(int8_t gap_open, int8_t gap_extend, const int8_t* score_matrix, int32_t alphabet_size) {
+    int8_t* score_matrix_copy = (int8_t*) malloc(sizeof(int8_t) * alphabet_size * alphabet_size);
+    for (int32_t i = 0; i < alphabet_size * alphabet_size; ++i) {
+        score_matrix_copy[i] = score_matrix[i];
+    }
+    int8_t gcf = 1;
+    int8_t factor = 2;
+    int8_t min_score = 127;
+    if (abs(gap_open) < min_score) {
+        min_score = (int8_t) abs(gap_open);
+    }
+    if (abs(gap_extend) < min_score) {
+        min_score = (int8_t) abs(gap_extend);
+    }
+    for (int32_t i = 0; i < alphabet_size * alphabet_size; ++i) {
+        if (abs(score_matrix[i]) < min_score) {
+            min_score = (int8_t) abs(score_matrix[i]);
+        }
+    }
+    while (factor <= min_score / 2) {
+        if (gap_open % factor != 0) {
+            factor++;
+            continue;
+        }
+        if (gap_extend % factor != 0) {
+            factor++;
+            continue;
+        }
+        for (int32_t i = 0; i < alphabet_size * alphabet_size; ++i) {
+            if (score_matrix[i] % factor != 0) {
+                factor++;
+                continue;
+            }
+        }
+        gcf *= factor;
+        gap_open /= factor;
+        gap_extend /= factor;
+
+        for (int32_t i = 0; i < alphabet_size * alphabet_size; ++i) {
+            score_matrix_copy[i] /= factor;
+        }
+    }
+    free(score_matrix_copy);
+    return gcf;
+}
+
+/* Returns the total probability in the emit state of the underlying aligning HMM with a given logarithm base */
+double hmm_partition_func(double lam, int8_t gap_open, int8_t gap_extend, const int8_t* score_matrix,
+                          const double* char_freqs, uint32_t alphabet_size, double rand_trans_prob) {
+
+    double inv_exp_open = exp(-lam * (gap_open - gap_extend));
+    double exp_extend = exp(lam * gap_extend);
+    double exit_prob = (1.0 - rand_trans_prob) * (1.0 - rand_trans_prob);
+    double cont_prob = 1.0 - exit_prob;
+    double gap_to_align = cont_prob - rand_trans_prob * exp_extend;
+
+    double partition = 0.0;
+    for (int32_t i = 0; i < alphabet_size; i++) {
+        for (int32_t j = 0; j < alphabet_size; j++) {
+            partition += char_freqs[i] * char_freqs[j] * exp(lam * score_matrix[i * alphabet_size + j]);
+        }
+    }
+    partition *= rand_trans_prob * rand_trans_prob * (2.0 * rand_trans_prob * exp_extend + inv_exp_open * gap_to_align)
+                 / (inv_exp_open * cont_prob * gap_to_align);
+
+    if (isnan(partition)) {
+        fprintf(stderr, "Overflow error in log-odds base recovery partition function subroutine.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return partition;
+}
+
+/* Returns the derivative of hmm_partition_func. */
+double hmm_partition_func_deriv(double lam, int8_t gap_open, int8_t gap_extend, const int8_t* score_matrix,
+                                const double* char_freqs, uint32_t alphabet_size, double rand_trans_prob) {
+
+    double exit_prob = (1.0 - rand_trans_prob) * (1.0 - rand_trans_prob);
+    double cont_prob = 1.0 - exit_prob;
+
+    double deriv = 0.0;
+
+    for (int32_t i = 0; i < alphabet_size; i++) {
+        for (int32_t j = 0; j < alphabet_size; j++) {
+            int8_t s = score_matrix[i * alphabet_size + j];
+            int8_t eos = gap_extend - gap_open + s;
+            int8_t es = gap_extend + s;
+            int8_t os = -gap_open + s;
+            int8_t eo = gap_extend - gap_open;
+
+            // quotient rule
+            double denom = cont_prob * exp(-lam * gap_open) - rand_trans_prob * exp(lam * eo);
+            double numer = 2.0 * rand_trans_prob * exp(lam * es) - rand_trans_prob * exp(lam * eos) + cont_prob * exp(lam * os);
+            double d_denom = -gap_open * cont_prob * exp(-lam * gap_open) - rand_trans_prob * eo * exp(lam * eo);
+            double d_numer = 2.0 * es * rand_trans_prob * exp(lam * es) - rand_trans_prob * eos * exp(lam * eos) + cont_prob * os * exp(lam * os);
+            deriv += char_freqs[i] * char_freqs[j] * (d_numer / denom - d_denom * numer / (denom * denom));
+        }
+    }
+
+    deriv *= rand_trans_prob * rand_trans_prob;
+
+    if (isnan(deriv)) {
+        fprintf(stderr, "Overflow error in log-odds base recovery partition function derivative subroutine.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return deriv;
+}
+
+/* Numerical routine to compute the base of the logarithm that translates alignment scores to log-odds from an HMM. */
+double recover_log_base(int8_t gap_open, int8_t gap_extend, const int8_t* score_matrix,
+                        const double* char_freqs, uint32_t alphabet_size, double rand_trans_prob, double tol) {
+
+    //// locate upper and lower bounds that contain only the larger of the two roots
+
+    // compute singularity
+    double singularity = log((1.0 - (1.0 - rand_trans_prob) * (1.0 - rand_trans_prob)) / rand_trans_prob) / gap_extend;
+
+    double lower_bound = singularity > 0 ? singularity : 0.0;
+    double upper_bound;
+
+    // choose arbitrary positive value larger than singularity to start
+    double lam = lower_bound + 1.0;
+    double partition = hmm_partition_func(lam, gap_open, gap_extend, score_matrix, char_freqs,
+                                          alphabet_size, rand_trans_prob);
+    double d_partition = hmm_partition_func_deriv(lam, gap_open, gap_extend, score_matrix, char_freqs,
+                                                  alphabet_size, rand_trans_prob);
+
+    // search until finding a value greater than the smaller root
+    while (partition >= 1.0 && d_partition < 0.0) {
+        lower_bound = lam;
+        lam += lam - singularity;
+        partition = hmm_partition_func(lam, gap_open, gap_extend, score_matrix, char_freqs,
+                                       alphabet_size, rand_trans_prob);
+        d_partition = hmm_partition_func_deriv(lam, gap_open, gap_extend, score_matrix, char_freqs,
+                                               alphabet_size, rand_trans_prob);
+    }
+    if (partition < 1.0) {
+        // second root is greater than current value, need find upper bound
+        do  {
+            lower_bound = lam;
+            lam += lam - singularity;
+            partition = hmm_partition_func(lam, gap_open, gap_extend, score_matrix, char_freqs,
+                                           alphabet_size, rand_trans_prob);
+        } while (partition < 1.0);
+        upper_bound = lam;
+    }
+    else {
+        // second root is smaller than current value, need to find lower bound
+        upper_bound = lam;
+        while (1) {
+            lam = 0.5 * (lower_bound + upper_bound);
+            partition = hmm_partition_func(lam, gap_open, gap_extend, score_matrix, char_freqs,
+                                           alphabet_size, rand_trans_prob);
+            if (partition < 1.0) {
+                // found bounding window
+                lower_bound = lam;
+                break;
+            }
+
+            if (upper_bound /lower_bound - 1.0 < tol) {
+                fprintf(stderr, "Scores do not correspond to an aligning HMM. Unable to perform base quality adjusted alignment.\n");
+                exit(EXIT_FAILURE);
+            }
+
+            d_partition = hmm_partition_func_deriv(lam, gap_open, gap_extend, score_matrix, char_freqs,
+                                                   alphabet_size, rand_trans_prob);
+
+            if (d_partition < 0.0) {
+                // overshot, now on downward slope
+                lower_bound = lam;
+            }
+            else {
+                // still on upward slope
+                upper_bound = lam;
+            }
+        }
+    }
+
+    //// bisect within upper and lower bound to find root
+
+    while (upper_bound / lower_bound - 1.0 >= tol) {
+        lam = 0.5 * (lower_bound + upper_bound);
+        partition = hmm_partition_func(lam, gap_open, gap_extend, score_matrix, char_freqs,
+                                       alphabet_size, rand_trans_prob);
+        if (partition < 1.0) {
+            lower_bound = lam;
+        }
+        else {
+            upper_bound = lam;
+        }
+    }
+
+    return 0.5 * (lower_bound + upper_bound);
+}
+
+/* Returns a 3-dimensional matrix of quality-adjusted scores indexed by (qual score) x (ref base) x (query base). */
+int8_t* adjusted_qual_matrix(uint8_t max_qual, int8_t gap_open, int8_t gap_extend, const int8_t* score_matrix,
+                             const double* char_freqs, uint32_t alphabet_size, double rand_trans_prob, double tol){
+
+    // recover base of logarithm used in log odds scores
+    double lam;
+    int8_t gcf = score_gcf(gap_open, gap_extend, score_matrix, alphabet_size);
+    if (gcf != 1) {
+        // factoring out GCF can avoid numerical problems without affecting correctness
+        int8_t* score_matrix_scaled = (int8_t*) malloc(sizeof(int8_t) * alphabet_size * alphabet_size);
+        for (int32_t i = 0; i < alphabet_size * alphabet_size; i++) {
+            score_matrix_scaled[i] = score_matrix[i] / gcf;
+        }
+        lam = recover_log_base(gap_open / gcf, gap_extend / gcf, score_matrix_scaled,
+                               char_freqs, alphabet_size, rand_trans_prob, tol) / gcf;
+        free(score_matrix_scaled);
+    }
+    else {
+        // scores are relatively prime, cannot remove GCF
+        lam = recover_log_base(gap_open, gap_extend, score_matrix, char_freqs, alphabet_size, rand_trans_prob, tol);
+    }
+
+
+
+    // recover the align-to-align transition probability from the HMM
+    double inv_exp_open = exp(-lam * (gap_open - gap_extend));
+    double exp_extend = exp(lam * gap_extend);
+    double exit_prob = (1.0 - rand_trans_prob) * (1.0 - rand_trans_prob);
+    double cont_prob = 1.0 - exit_prob;
+    double gap_to_align = cont_prob - rand_trans_prob * exp_extend;
+    double double_trans_prob = rand_trans_prob * rand_trans_prob;
+
+    double align_to_align = (inv_exp_open * cont_prob * gap_to_align) /
+                            (2.0 * rand_trans_prob * exp_extend + inv_exp_open * gap_to_align);
+
+    // recover the emission probabilities of the align state of the HMM
+    int32_t mat_size = alphabet_size * alphabet_size;
+    double* align_state_prob = (double*) malloc(sizeof(double) * mat_size);
+
+    for (int32_t i = 0; i < alphabet_size; i++) {
+        for (int32_t j = 0; j < alphabet_size; j++) {
+            align_state_prob[i * alphabet_size + j] = exp(lam * score_matrix[i * alphabet_size + j]) * double_trans_prob
+                                                      * char_freqs[i] * char_freqs[j] / align_to_align;
+        }
+    }
+
+    // compute the sum of the emission probabilities under a base error
+    double* align_state_complement_prob = (double*) malloc(sizeof(double) * mat_size);
+    for (int32_t i = 0; i < alphabet_size; i++) {
+        for (int32_t j = 0; j < alphabet_size; j++) {
+            align_state_complement_prob[i * alphabet_size + j] = 0.0;
+            for (int32_t k = 0; k < alphabet_size; k++) {
+                if (k != j) {
+                    align_state_complement_prob[i * alphabet_size + j] += align_state_prob[i * alphabet_size + k];
+                }
+            }
+        }
+    }
+
+    // compute the adjusted alignment scores for each quality level
+    int8_t* adj_qual_mat = (int8_t*) calloc(mat_size * (max_qual + (int8_t) 1), sizeof(int8_t));
+    for (int8_t q = 1; q <= max_qual; q++) {
+        double err = pow(10.0, -q / 10.0);
+        for (int32_t i = 0; i < alphabet_size; i++) {
+            for (int32_t j = 0; j < alphabet_size; j++) {
+                double score = log(align_to_align * ((1.0 - err) * align_state_prob[i * alphabet_size + j] +
+                                                     (err / (alphabet_size - 1.0)) * align_state_complement_prob[i * alphabet_size + j])
+                                   / (double_trans_prob * char_freqs[i] * ((1.0 - err) * char_freqs[j] + (err / (alphabet_size - 1.0)) * (1.0 - char_freqs[j]))));
+                score /= lam;
+                adj_qual_mat[q * mat_size + i * alphabet_size + j] = round8_t(score);
+            }
+        }
+    }
+
+    free(align_state_complement_prob);
+    free(align_state_prob);
+
+    return adj_qual_mat;
+}
+
+/* Returns a 3-dimensional matrix of quality-adjusted scores indexed by (qual score) x (ref base) x (query base)
+ * that have been scaled up to (at most) a max score to accentuate differences, also adjusts value of gap penalties. */
+int8_t* scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, int8_t* gap_open_out, int8_t* gap_extend_out,
+                                    const int8_t* score_matrix, const double* char_freqs, uint32_t alphabet_size,
+                                    double rand_trans_prob, double tol) {
+
+    int8_t gap_extend = *gap_extend_out;
+    int8_t gap_open = *gap_open_out;
+
+    // find largest integer multiplier that keeps all scores under maximum
+    uint8_t multiplier = (uint8_t) abs(max_score);
+    if (abs(max_score / gap_open) < multiplier) {
+        multiplier = (uint8_t) abs(max_score / gap_open);
+    }
+    if (abs(max_score / gap_extend) < multiplier) {
+        multiplier = (uint8_t) abs(max_score / gap_extend);
+    }
+    for (int32_t i = 0; i < alphabet_size * alphabet_size; i++) {
+        if (abs(max_score / score_matrix[i]) < multiplier) {
+            multiplier = (uint8_t) abs(max_score / gap_extend);
+        }
+    }
+
+    if (multiplier == 0) {
+        fprintf(stderr, "Max scaled score is below baseline score.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // scale scores by multiplier
+    int8_t* scaled_score_mat = (int8_t*) malloc(sizeof(int8_t) * alphabet_size * alphabet_size);
+
+    for (int32_t i = 0; i < alphabet_size * alphabet_size; i++) {
+        scaled_score_mat[i] = multiplier * score_matrix[i];
+    }
+
+    // compute adjusted score matrices
+    int8_t* scaled_adj_qual_mat = adjusted_qual_matrix(max_qual, multiplier * gap_open, multiplier * gap_extend,
+                                                       scaled_score_mat, char_freqs, alphabet_size, rand_trans_prob, tol);
+
+    free(scaled_score_mat);
+
+    *gap_open_out = multiplier * gap_open;
+    *gap_extend_out = multiplier * gap_extend;
+
+    return scaled_adj_qual_mat;
+}
 
 /* Generate query profile rearrange query sequence & calculate the weight of match/mismatch. */
 __m128i* gssw_qP_byte (const int8_t* read_num,
@@ -464,6 +808,34 @@ __m128i* gssw_qP_word (const int8_t* read_num,
 	return vProfile;
 }
 
+__m128i* gssw_adj_qP_word (const int8_t* read_num,
+                           const int8_t* qual,
+                           const int8_t* adj_mat,
+                           const int32_t readLen,
+                           const int32_t n) {
+
+    int32_t segLen = (readLen + 7) / 8;
+    __m128i* vProfile = (__m128i*) malloc(n * segLen * sizeof(__m128i));
+    int16_t* t = (int16_t*) vProfile;
+    int32_t nt, i, j, segNum;
+
+    int32_t matSize = n * n;
+
+    /* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
+    printf("\n");
+    for (nt = 0; LIKELY(nt < n); nt ++) {
+        for (i = 0; i < segLen; i ++) {
+            j = i;
+            for (segNum = 0; LIKELY(segNum < 8) ; segNum ++) {
+                *t = j>= readLen ? 0 : adj_mat[qual[j] * matSize + nt * n + read_num[j]];
+                t++;
+                j += segLen;
+            }
+        }
+    }
+    return vProfile;
+}
+
 gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
                                        int8_t ref_dir,	// 0: forward ref; 1: reverse ref
                                        int32_t refLen,
@@ -759,6 +1131,20 @@ gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t
 	p->readLen = readLen;
 	p->n = n;
 	return p;
+}
+
+/* Initiailize a profile with quality adjusted scores. Automatically selects score_size = 1 since adjusted scores should
+ * be maximized to increase sensitity. */
+gssw_profile* gssw_qual_adj_init (const int8_t* read, const int8_t* qual, const int32_t readLen, const int8_t* adj_mat, const int32_t n) {
+    gssw_profile* p = (gssw_profile*)calloc(1, sizeof(struct gssw_profile));
+    p->profile_byte = 0;
+    p->bias = 0;
+    p->profile_word = gssw_adj_qP_word(read, qual, adj_mat, readLen, n);
+    p->read = read;
+    p->mat = adj_mat;
+    p->readLen = readLen;
+    p->n = n;
+    return p;
 }
 
 void gssw_init_destroy (gssw_profile* p) {

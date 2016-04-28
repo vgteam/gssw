@@ -203,6 +203,57 @@ typedef struct {
 extern "C" {
 #endif // __cplusplus
 
+/*! @function   Create a base-quality adjusted scoring matrix to use across reads
+ *  @param  max_qual         highest quality score to compute adjustments for
+ *  @param  gap_open         gap open penalty
+ *                              - should be a negative number
+ *  @param  gap_extend       gap extend penalty
+ *                              - should be a negative number
+ *  @param  score_matrix     match score matrix
+ *                              - should be a negative number
+ *                              - should be of length alphabet_size * alphabet_size
+ *                              - query sequences correspond to columns
+ *  @param  char_freqs       frequency of characters in the alphabet
+ *                              - should be of length alphabet_size
+ *                              - should sum to 1
+ *  @param  alphabet_size    number of characters in alphabet
+ *  @param  rand_trans_prob  transition probability in null-HMM
+ *                              - governs length of sequences in null model, ideally set to 1/(1 + E[seq_length])
+ *                              - can usually be set to 1 without much distortion
+ *  @param  tol              numerical tolerance for computing base of logarithm underlying log-odds scores
+ *                              - recommended, 1e-14 to 1e-12
+ *  @return                  pointer to the adjusted matrix
+ */
+int8_t* adjusted_qual_matrix(uint8_t max_qual, int8_t gap_open, int8_t gap_extend, const int8_t* score_matrix,
+                             const double* char_freqs, uint32_t alphabet_size, double rand_trans_prob, double tol);
+
+/*! @function   Create a scaled base-quality adjusted scoring matrix to use across reads (scaling improves sensitivity)
+ *  @param  max_score        highest score to scale to
+ *  @param  max_qual         highest quality score to compute adjustments for
+ *  @param  gap_open_out     address of gap open penalty (will be modified)
+ *                              - should be a negative number
+ *  @param  gap_extend_out   address of gap extend penalty (will be modified)
+ *                              - should be a negative number
+ *  @param  score_matrix     match score matrix
+ *                              - should be a negative number
+ *                              - should be of length alphabet_size * alphabet_size
+ *                              - query sequences correspond to columns
+ *  @param  char_freqs       frequency of characters in the alphabet
+ *                              - should be of length alphabet_size
+ *                              - should sum to 1
+ *  @param  alphabet_size    number of characters in alphabet
+ *  @param  rand_trans_prob  transition probability in null-HMM
+ *                              - governs length of sequences in null model, ideally set to 1/(1 + E[seq_length])
+ *                              - can usually be set to 1 without much distortion
+ *  @param  tol              numerical tolerance for computing base of logarithm underlying log-odds scores
+ *                              - recommended, 1e-14 to 1e-12
+ *  @return                  pointer to the adjusted matrix
+ *  @note   The scores located at gap_open_out and gap_extend_out will be modified
+ */
+int8_t* scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, int8_t* gap_open_out, int8_t* gap_extend_out,
+                                    const int8_t* score_matrix, const double* char_freqs, uint32_t alphabet_size,
+                                    double rand_trans_prob, double tol);
+
 /*!	@function	Create the query profile using the query sequence.
 	@param	read	pointer to the query sequence; the query sequence needs to be numbers
 	@param	readLen	length of the query sequence
@@ -222,6 +273,27 @@ extern "C" {
 			mat is the pointer to the array {2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2}
 */
 gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n, const int8_t score_size);
+
+/*!	@function	Create the quality-score adjusted query profile using the query sequence and its quality scores.
+	@param	read	 pointer to the query sequence; the query sequence needs to be numbers
+	@param	readLen	 length of the query sequence
+	@param	adj_mat	 pointer to the adjusted substitution matrix; mat needs to be corresponding to the read sequence
+                       - see adjusted_qual_matrix and scaled_adjusted_qual_matrix
+	@param	n	     the square root of the number of elements in mat (mat has n*n elements)
+	@return	pointer to the query profile structure
+	@note	example for parameter read and mat:
+			If the query sequence is: ACGTATC, the sequence that read points to can be: 1234142
+			Then if the penalty for match is 2 and for mismatch is -2, the substitution matrix of parameter mat will be:
+			//A  C  G  T
+			  2 -2 -2 -2 //A
+			 -2  2 -2 -2 //C
+			 -2 -2  2 -2 //G
+			 -2 -2 -2  2 //T
+			mat is the pointer to the array {2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2}
+	@note   score_size option from gssw_init is implicitly set to 1 since adjusted scores should be scaled to as large
+            of value as possible anyway to increase sensitivity
+*/
+gssw_profile* gssw_qual_adj_init (const int8_t* read, const int8_t* qual, const int32_t readLen, const int8_t* adj_mat, const int32_t n);
 
 /*!	@function	Release the memory allocated by function ssw_init.
 	@param	p	pointer to the query profile structure
