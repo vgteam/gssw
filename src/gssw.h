@@ -53,7 +53,7 @@ typedef struct gssw_profile gssw_profile;
 // run through *that* matrix in rows. Each row is an SSE 128-bit chunk, and is
 // processed all at once.
 
-// Another way to think of the layout is to have 16 or 8 cursors moving down the
+// Another way to think of the layout is to have 16 or 8 cursors moving down) the
 // column in parallel. Each cursor has easy access to the contents of the cell
 // above it, except for the first one (which is fixed with some fix-up logic
 // called the "lazy F loop").
@@ -197,62 +197,9 @@ typedef struct {
     gssw_graph_cigar cigar;
 } gssw_graph_mapping;
 
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
-
-/*! @function   Create a base-quality adjusted scoring matrix to use across reads
- *  @param  max_qual         highest quality score to compute adjustments for
- *  @param  gap_open         gap open penalty
- *                              - should be a negative number
- *  @param  gap_extend       gap extend penalty
- *                              - should be a negative number
- *  @param  score_matrix     match score matrix
- *                              - should be a negative number
- *                              - should be of length alphabet_size * alphabet_size
- *                              - query sequences correspond to columns
- *  @param  char_freqs       frequency of characters in the alphabet
- *                              - should be of length alphabet_size
- *                              - should sum to 1
- *  @param  alphabet_size    number of characters in alphabet
- *  @param  rand_trans_prob  transition probability in null-HMM
- *                              - governs length of sequences in null model, ideally set to 1/(1 + E[seq_length])
- *                              - can usually be set to 1 without much distortion
- *  @param  tol              numerical tolerance for computing base of logarithm underlying log-odds scores
- *                              - recommended, 1e-14 to 1e-12
- *  @return                  pointer to the adjusted matrix
- */
-int8_t* adjusted_qual_matrix(uint8_t max_qual, int8_t gap_open, int8_t gap_extend, const int8_t* score_matrix,
-                             const double* char_freqs, uint32_t alphabet_size, double rand_trans_prob, double tol);
-
-/*! @function   Create a scaled base-quality adjusted scoring matrix to use across reads (scaling improves sensitivity)
- *  @param  max_score        highest score to scale to
- *  @param  max_qual         highest quality score to compute adjustments for
- *  @param  gap_open_out     address of gap open penalty (will be modified)
- *                              - should be a negative number
- *  @param  gap_extend_out   address of gap extend penalty (will be modified)
- *                              - should be a negative number
- *  @param  score_matrix     match score matrix
- *                              - should be a negative number
- *                              - should be of length alphabet_size * alphabet_size
- *                              - query sequences correspond to columns
- *  @param  char_freqs       frequency of characters in the alphabet
- *                              - should be of length alphabet_size
- *                              - should sum to 1
- *  @param  alphabet_size    number of characters in alphabet
- *  @param  rand_trans_prob  transition probability in null-HMM
- *                              - governs length of sequences in null model, ideally set to 1/(1 + E[seq_length])
- *                              - can usually be set to 1 without much distortion
- *  @param  tol              numerical tolerance for computing base of logarithm underlying log-odds scores
- *                              - recommended, 1e-14 to 1e-12
- *  @return                  pointer to the adjusted matrix
- *  @note   The scores located at gap_open_out and gap_extend_out will be modified
- */
-int8_t* scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, int8_t* gap_open_out, int8_t* gap_extend_out,
-                                    const int8_t* score_matrix, const double* char_freqs, uint32_t alphabet_size,
-                                    double rand_trans_prob, double tol);
 
 /*!	@function	Create the query profile using the query sequence.
 	@param	read	pointer to the query sequence; the query sequence needs to be numbers
@@ -278,7 +225,7 @@ gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t
 	@param	read	 pointer to the query sequence; the query sequence needs to be numbers
 	@param	readLen	 length of the query sequence
 	@param	adj_mat	 pointer to the adjusted substitution matrix; mat needs to be corresponding to the read sequence
-                       - see adjusted_qual_matrix and scaled_adjusted_qual_matrix
+                       - see gssw_adjusted_qual_matrix and gssw_scaled_adjusted_qual_matrix
 	@param	n	     the square root of the number of elements in mat (mat has n*n elements)
 	@return	pointer to the query profile structure
 	@note	example for parameter read and mat:
@@ -528,6 +475,16 @@ gssw_graph_fill (gssw_graph* graph,
                  const int32_t maskLen,
                  const int8_t score_size);
 
+gssw_graph*
+gssw_graph_fill_qual_adj(gssw_graph* graph,
+                         const char* read_seq,
+                         const char* read_qual,
+                         const int8_t* nt_table,
+                         const int8_t* adj_score_matrix,
+                         const uint8_t weight_gapO,
+                         const uint8_t weight_gapE,
+                         const int32_t maskLen);
+    
 gssw_graph* gssw_graph_create(uint32_t size);
 int32_t gssw_graph_add_node(gssw_graph* graph,
                             gssw_node* node);
@@ -553,6 +510,71 @@ int8_t* gssw_create_nt_table(void);
 int8_t* gssw_create_num(const char* seq,
                         const int32_t len,
                         const int8_t* nt_table);
+int8_t* gssw_create_qual_num(const char* qual,
+                             const int32_t len);
+
+// functions for adjusting alignments for base quality (see also gssw_qual_adj_init)
+
+/*! @function   Create a base-quality adjusted scoring matrix to use across reads
+ *  @param  max_qual         highest quality score to compute adjustments for
+ *  @param  gap_open         gap open penalty
+ *                              - should be a negative number
+ *  @param  gap_extend       gap extend penalty
+ *                              - should be a negative number
+ *  @param  score_matrix     match score matrix
+ *                              - should be a negative number
+ *                              - should be of length alphabet_size * alphabet_size
+ *                              - query sequences correspond to columns
+ *  @param  char_freqs       frequency of characters in the alphabet
+ *                              - should be of length alphabet_size
+ *                              - should sum to 1
+ *  @param  alphabet_size    number of characters in alphabet
+ *  @param  rand_trans_prob  transition probability in null-HMM
+ *                              - governs length of sequences in null model, ideally set to 1 - 1/E[seq_length])
+ *                              - can usually be set to 1 without much distortion
+ *  @param  tol              numerical tolerance for computing base of logarithm underlying log-odds scores
+ *                              - recommended, 1e-14 to 1e-12
+ *  @return                  pointer to the adjusted matrix
+ *  @note   matrix is indexed by (qual_score) x (ref_char) x (query_char)
+ */
+int8_t* gssw_adjusted_qual_matrix(uint8_t max_qual, int8_t gap_open, int8_t gap_extend, const int8_t* score_matrix,
+                                  const double* char_freqs, uint32_t alphabet_size, double rand_trans_prob, double tol);
+
+/*! @function   Create a scaled base-quality adjusted scoring matrix to use across reads (scaling improves sensitivity)
+ *  @param  max_score        highest score to scale to
+ *  @param  max_qual         highest quality score to compute adjustments for
+ *  @param  gap_open_out     address of gap open penalty (will be modified)
+ *                              - should be a negative number
+ *  @param  gap_extend_out   address of gap extend penalty (will be modified)
+ *                              - should be a negative number
+ *  @param  score_matrix     match score matrix
+ *                              - should be a negative number
+ *                              - should be of length alphabet_size * alphabet_size
+ *                              - query sequences correspond to columns
+ *  @param  char_freqs       frequency of characters in the alphabet
+ *                              - should be of length alphabet_size
+ *                              - should sum to 1
+ *  @param  alphabet_size    number of characters in alphabet
+ *  @param  rand_trans_prob  transition probability in null-HMM
+ *                              - governs length of sequences in null model, ideally set to 1/(1 + E[seq_length])
+ *                              - can usually be set to 1 without much distortion
+ *  @param  tol              numerical tolerance for computing base of logarithm underlying log-odds scores
+ *                              - recommended, 1e-14 to 1e-12
+ *  @return                  pointer to the adjusted matrix
+ *  @note   The scores located at gap_open_out and gap_extend_out will be modified
+ *  @note   matrix is indexed by (qual_score) x (ref_char) x (query_char)
+ */
+int8_t* gssw_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, int8_t* gap_open_out, int8_t* gap_extend_out,
+                                         const int8_t* score_matrix, const double* char_freqs, uint32_t alphabet_size,
+                                         double rand_trans_prob, double tol);
+
+/* Wrapper for gssw_adjusted_qual_matrix */
+int8_t* gssw_dna_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, int8_t* gap_open_out,
+                                             int8_t* gap_extend_out, int8_t match_score, int8_t mismatch_score,
+                                             double gc_content, double rand_trans_prob, double tol);
+
+/* Creates a new set of matrices with 0 scores in the final row/column for ambiguous characters */
+int8_t* gssw_add_ambiguous_char_to_adjusted_matrix(int8_t* adj_mat, uint8_t max_qual, uint32_t alphabet_size);
     
 #ifdef __cplusplus
 }
