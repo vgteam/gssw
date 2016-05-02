@@ -374,10 +374,10 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
                                             int32_t refLen,
                                             const char* read,
                                             int32_t readLen,
-                                            int32_t match,
-                                            int32_t mismatch,
-                                            int32_t gap_open,
-                                            int32_t gap_extension);
+                                            int8_t* nt_table,
+                                            int8_t* score_matrix,
+                                            uint8_t gap_open,
+                                            uint8_t gap_extension);
 
 gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
                                             uint16_t* score,
@@ -389,10 +389,10 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
                                             int32_t refLen,
                                             const char* read,
                                             int32_t readLen,
-                                            int32_t match,
-                                            int32_t mismatch,
-                                            int32_t gap_open,
-                                            int32_t gap_extension);
+                                            int8_t* nt_table,
+                                            int8_t* score_matrix,
+                                            uint8_t gap_open,
+                                            uint8_t gap_extension);
 
 gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        uint16_t* score,
@@ -404,19 +404,19 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        int32_t refLen,
                                        const char* read,
                                        int32_t readLen,
-                                       int32_t match,
-                                       int32_t mismatch,
-                                       int32_t gap_open,
-                                       int32_t gap_extension);
+                                       int8_t* nt_table,
+                                       int8_t* score_matrix,
+                                       uint8_t gap_open,
+                                       uint8_t gap_extension);
 
 // Compute and return the traceback from a graph for which the alignment DP has been performed.
 gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                            const char* read,
                                            int32_t readLen,
-                                           int32_t match,
-                                           int32_t mismatch,
-                                           int32_t gap_open,
-                                           int32_t gap_extension);
+                                           int8_t* nt_table,
+                                           int8_t* score_matrix,
+                                           uint8_t gap_open,
+                                           uint8_t gap_extension);
     
 /*! @function         Return 1 if the alignment is in 16/128bit (byte sized) or 0 if word-sized.
     @param alignment  Alignment structure.
@@ -575,7 +575,8 @@ int8_t* gssw_dna_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual,
 
 /* Creates a new set of matrices with 0 scores in the final row/column for ambiguous characters */
 int8_t* gssw_add_ambiguous_char_to_adjusted_matrix(int8_t* adj_mat, uint8_t max_qual, uint32_t alphabet_size);
-    
+
+
 #ifdef __cplusplus
 }
 #endif	// __cplusplus

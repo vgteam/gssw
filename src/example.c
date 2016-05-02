@@ -15,7 +15,8 @@
 //	Align a pair of genome sequences.
 int main (int argc, char * const argv[]) {
     // default parameters for genome sequence alignment
-	int32_t match = 1, mismatch = 4, gap_open = 6, gap_extension = 1;
+    int8_t match = 1, mismatch = 4;
+    uint8_t gap_open = 6, gap_extension = 1;
     // from Mengyao's example about the importance of using all three matrices in traceback.
     // int32_t l, m, k, match = 2, mismatch = 1, gap_open = 2, gap_extension = 1;
 
@@ -62,8 +63,8 @@ int main (int argc, char * const argv[]) {
     gssw_graph_mapping* gm = gssw_graph_trace_back (graph,
                                                     read_seq,
                                                     strlen(read_seq),
-                                                    match,
-                                                    mismatch,
+                                                    nt_table,
+                                                    mat,
                                                     gap_open,
                                                     gap_extension);
 

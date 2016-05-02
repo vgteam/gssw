@@ -31,7 +31,7 @@ int main (int argc, char * const argv[]) {
     char *ref_seq_2 = argv[2];
     char *ref_seq_3 = argv[3];
     char *ref_seq_4 = argv[4];
-    char *read_seq = argv[5];
+    //char *read_seq = argv[5];
     char *read_qual = argv[6];
     
     remove_phred_offset(read_qual);
@@ -79,20 +79,20 @@ int main (int argc, char * const argv[]) {
     gssw_graph_add_node(graph, nodes[2]);
     gssw_graph_add_node(graph, nodes[3]);
     
-    gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, adj_mat, gap_open, gap_extension, 15);
-    gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
-    gssw_graph_mapping* gm = gssw_graph_trace_back (graph,
-                                                    read_seq,
-                                                    strlen(read_seq),
-                                                    match,
-                                                    mismatch,
-                                                    gap_open,
-                                                    gap_extension);
-
-    gssw_print_graph_mapping(gm, stdout);
-    gssw_graph_mapping_destroy(gm);
-    // note that nodes which are referred to in this graph are destroyed as well
-    gssw_graph_destroy(graph);
+//    gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, adj_mat, gap_open, gap_extension, 15);
+//    gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
+//    gssw_graph_mapping* gm = gssw_graph_trace_back (graph,
+//                                                    read_seq,
+//                                                    strlen(read_seq),
+//                                                    match,
+//                                                    mismatch,
+//                                                    gap_open,
+//                                                    gap_extension);
+//
+//    gssw_print_graph_mapping(gm, stdout);
+//    gssw_graph_mapping_destroy(gm);
+//    // note that nodes which are referred to in this graph are destroyed as well
+//    gssw_graph_destroy(graph);
 
     free(nt_table);
 	free(adj_mat);
