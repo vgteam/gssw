@@ -1,6 +1,6 @@
 /* The MIT License
 
-   Copyright (c) 2012-1015 Boston College.
+   Copyright (c) 2012-2015 Boston College.
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -93,6 +93,37 @@ __m128i* gssw_qP_byte (const int8_t* read_num,
 		}
 	}
 	return vProfile;
+}
+
+__m128i* gssw_adj_qP_byte (const int8_t* read_num,
+                           const int8_t* qual,
+                           const int8_t* adj_mat,
+                           const int32_t readLen,
+                           const int32_t n,	/* the edge length of the squre matrix mat */
+                           uint8_t bias) {
+    
+    int32_t segLen = (readLen + 15) / 16; /* Split the 128 bit register into 16 pieces.
+                                           Each piece is 8 bit. Split the read into 16 segments.
+                                           Calculat 16 segments in parallel.
+                                           */
+    __m128i* vProfile = (__m128i*)malloc(n * segLen * sizeof(__m128i));
+    int8_t* t = (int8_t*)vProfile;
+    int32_t nt, i, j, segNum;
+    
+    int32_t matSize = n * n;
+    
+    /* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
+    for (nt = 0; LIKELY(nt < n); nt ++) {
+        for (i = 0; i < segLen; i ++) {
+            j = i;
+            for (segNum = 0; LIKELY(segNum < 16) ; segNum ++) {
+                *t = j>= readLen ? bias : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + bias;
+                t++;
+                j += segLen;
+            }
+        }
+    }
+    return vProfile;
 }
 
 /* To determine the maximum values within each vector, rather than between vectors. */
@@ -765,6 +796,17 @@ int8_t* gssw_seq_reverse(const int8_t* seq, int32_t end)	/* end is 0-based align
 	return reverse;
 }
 
+int8_t gssw_max_qual(const int8_t* qual, const int32_t len) {
+    int8_t max_qual = -128;
+    int32_t i;
+    for (i = 0; i < len; i++) {
+        if (qual[i] > max_qual) {
+            max_qual = qual[i];
+        }
+    }
+    return max_qual;
+}
+
 gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n, const int8_t score_size) {
 	gssw_profile* p = (gssw_profile*)calloc(1, sizeof(struct gssw_profile));
 	p->profile_byte = 0;
@@ -790,11 +832,25 @@ gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t
 
 /* Initiailize a profile with quality adjusted scores. Automatically selects score_size = 1 since adjusted scores should
  * be maximized to increase sensitity. */
-gssw_profile* gssw_qual_adj_init (const int8_t* read, const int8_t* qual, const int32_t readLen, const int8_t* adj_mat, const int32_t n) {
+gssw_profile* gssw_qual_adj_init (const int8_t* read, const int8_t* qual, const int32_t readLen, const int8_t* adj_mat,
+                                  const int32_t n, const int8_t score_size) {
     gssw_profile* p = (gssw_profile*)calloc(1, sizeof(struct gssw_profile));
     p->profile_byte = 0;
     p->bias = 0;
-    p->profile_word = gssw_adj_qP_word(read, qual, adj_mat, readLen, n);
+    if (score_size == 0 || score_size == 2) {
+        /* Find the bias to use in the substitution matrix */
+        int32_t bias = 0, i;
+        // only need to check highest quality matrix since scores shrink toward 0 with lower quality scores
+        int32_t adj_mat_offset = n * n * gssw_max_qual(qual, readLen);
+        for (i = 0; i < n*n; i++) if (adj_mat[adj_mat_offset + i] < bias) bias = adj_mat[adj_mat_offset + i];
+        bias = abs(bias);
+        
+        p->bias = bias;
+        p->profile_byte = gssw_adj_qP_byte (read, qual, adj_mat, readLen, n, bias);
+    }
+    if (score_size == 1 || score_size == 2) {
+        p->profile_word = gssw_adj_qP_word(read, qual, adj_mat, readLen, n);
+    }
     p->read = read;
     p->mat = adj_mat;
     p->readLen = readLen;
@@ -1072,6 +1128,49 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
     // thing on this node and we take it along as the score to be at on the
     // other node (??)
     
+#ifdef DEBUG_TRACEBACK
+    int l, k;
+    fprintf(stderr, "mH\n");
+    fprintf(stderr, "\t");
+    for (k = 0; k <= j; k++) {
+        fprintf(stderr, "%c\t", read[k]);
+    }
+    fprintf(stderr, "\n");
+    for (l = 0; l <= i; l++) {
+        fprintf(stderr, "%c\t", ref[l]);
+        for (k = 0; k <= j; k++) {
+            fprintf(stderr, "%d\t", mH[readLen*l + k]);
+        }
+        fprintf(stderr, "\n");
+    }
+    fprintf(stderr, "mE\n");
+    fprintf(stderr, "\t");
+    for (k = 0; k < j; k++) {
+        fprintf(stderr, "%c\t", read[k]);
+    }
+    fprintf(stderr, "\n");
+    for (l = 0; l < i; l++) {
+        fprintf(stderr, "%c\t", ref[l]);
+        for (k = 0; k < j; k++) {
+            fprintf(stderr, "%d\t", mE[readLen*l + k]);
+        }
+        fprintf(stderr, "\n");
+    }
+    fprintf(stderr, "mF\n");
+    fprintf(stderr, "\t");
+    for (k = 0; k < j; k++) {
+        fprintf(stderr, "%c\t", read[k]);
+    }
+    fprintf(stderr, "\n");
+    for (l = 0; l < i; l++) {
+        fprintf(stderr, "%c\t", ref[l]);
+        for (k = 0; k < j; k++) {
+            fprintf(stderr, "%d\t", mF[readLen*l + k]);
+        }
+        fprintf(stderr, "\n");
+    }
+#endif
+    
     uint16_t scoreHere;
     if(gRead) {
         // we're in mE
@@ -1093,6 +1192,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
     
 #ifdef DEBUG_TRACEBACK
         fprintf(stderr, "score=%i at %i,%i with %c vs %c, gRef=%i gRead=%i\n", scoreHere, i, j, ref[i], read[j], gRef, gRead);
+        fprintf(stderr, "mH[i,j] = %d, mE[i,j] = %d, mF[i,j] = %d\n", mH[readLen*i + j], mE[readLen*i + j], mF[readLen*i + j]);
 #endif
     
         if(gRead) {
@@ -1196,91 +1296,66 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
             else {
                 align_score = score_matrix[nt_table[(uint8_t) ref[i]] * 5 + nt_table[(uint8_t) read[j]]];
             }
+            
+            if(i > 0 && j > 0 && mH[readLen*(i-1) + (j-1)] == scoreHere && (ref[i] == 'N' || read[j] == 'N')) {
+                // This is an N-match.
+                gssw_cigar_push_back(result, 'N', 1);
+                // Leave score unchanged
+                --i; --j;
 #ifdef DEBUG_TRACEBACK
-            fprintf(stderr, "align score = %d, i = %d, j = %d\n", align_score, i, j);
+                fprintf(stderr, "N-match\n");
 #endif
-            int8_t internal_match = 0;
-            if (i > 0 && j > 0) {
-                if (mH[readLen*(i-1) + (j-1)] + align_score == scoreHere) {
-                    scoreHere -= align_score;
-                    if (ref[i] == 'N' || read[j] == 'N') {
-                        // This is an N-match.
-                        gssw_cigar_push_back(result, 'N', 1);
-                        // Leave score unchanged
+            } else if(i > 0 && j > 0 && mH[readLen*(i-1) + (j-1)] + align_score == scoreHere && ref[i] == read[j]) {
+                // This is a match
+                gssw_cigar_push_back(result, 'M', 1);
+                scoreHere -= align_score;
+                --i; --j;
 #ifdef DEBUG_TRACEBACK
-                        fprintf(stderr, "N-match, ref = %c, read = %c\n", ref[i], read[j]);
-#endif                    
-                    }
-                    else if (ref[i] == read[j]) {
-                        // This is a match
-                        gssw_cigar_push_back(result, 'M', 1);
-
-#ifdef DEBUG_TRACEBACK
-                        fprintf(stderr, "Match, ref = %c, read = %c\n", ref[i], read[j]);
+                fprintf(stderr, "Match\n");
 #endif
-                    }
-                    else {
-                        
-                        // This is a mismatch
-                        gssw_cigar_push_back(result, 'X', 1);
+            } else if(i > 0 && j > 0 && mH[readLen*(i-1) + (j-1)] + align_score == scoreHere && ref[i] != read[j]) {
+                // This is a mismatch
+                gssw_cigar_push_back(result, 'X', 1);
+                scoreHere -= align_score;
+                --i; --j;
 #ifdef DEBUG_TRACEBACK
-                        fprintf(stderr, "Mismatch, ref = %c, read = %c\n", ref[i], read[j]);
+                fprintf(stderr, "Mismatch\n");
 #endif
-                    }
-                    --i; --j;
-                    internal_match = 1;
-                }
+            } else if(scoreHere == align_score && ref[i] == read[j]) {
+                // Handle traceback termination at the leading match, anywhere.
+                gssw_cigar_push_back(result, 'M', 1);
+                scoreHere -= align_score;
+                // TODO: are we allowed to/do we need to let these go negative?
+                --i; --j;
+#ifdef DEBUG_TRACEBACK
+                fprintf(stderr, "Alignment start match\n");
+#endif
+            } else if(j > 0 && mF[readLen*i + j] == scoreHere) {
+                // We can't do anything diagonal. But we can become a ref gap, because there is more read.
+                gRef = 1;
+                //fprintf(stderr, "Ref gap close\n");
+            } else if(mE[readLen*i + j] == scoreHere) {
+                // We assume there's always more ref off to the left. We tried
+                // everything else, so try a read gap.
+                gRead = 1;
+#ifdef DEBUG_TRACEBACK
+                fprintf(stderr, "Read gap close\n");
+#endif
+            } else if(i == 0) {
+                // We can't go anywhere, but we're at the left edge, so maybe we
+                // can go to a previous node diagonally. Just let it slide.
+#ifdef DEBUG_TRACEBACK
+                fprintf(stderr, "Match/mismatch out left edge\n");
+#endif
+                break;
+            } else {
+                // We're in H and can't go anywhere.
+                fprintf(stderr, "error:[gssw] Stuck in main matrix!\n");
+                assert(0);
             }
-            if (!internal_match) {
-                if (scoreHere == align_score) {
-                    scoreHere -= align_score;
-                    if (ref[i] == 'N' || read[j] == 'N') {
-                        // This is an N-match.
-                        gssw_cigar_push_back(result, 'N', 1);
-    #ifdef DEBUG_TRACEBACK
-                        fprintf(stderr, "Alignment start N-match, ref = %c, read = %c\n", ref[i], read[j]);
-    #endif
-                    }
-                    else if (ref[i] == read[j]) {
-                        // This is a match
-                        gssw_cigar_push_back(result, 'M', 1);
-                        
-    #ifdef DEBUG_TRACEBACK
-                        fprintf(stderr, "Alignment start match, ref = %c, read = %c\n", ref[i], read[j]);
-    #endif
-                    }
-                    --i; --j;
-                }
-                else if(j > 0 && mF[readLen*i + j] == scoreHere) {
-                    // We can't do anything diagonal. But we can become a ref gap, because there is more read.
-                    gRef = 1;
-                    //fprintf(stderr, "Ref gap close\n");
-                }
-                else if(mE[readLen*i + j] == scoreHere) {
-                    // We assume there's always more ref off to the left. We tried
-                    // everything else, so try a read gap.
-                    gRead = 1;
-    #ifdef DEBUG_TRACEBACK
-                    fprintf(stderr, "Read gap close\n");
-    #endif
-                }
-                else if(i == 0) {
-                    // We can't go anywhere, but we're at the left (top) edge, so maybe we
-                    // can go to a previous node diagonally. Just let it slide.
-    #ifdef DEBUG_TRACEBACK                
-                    fprintf(stderr, "Match/mismatch out left edge\n");
-    #endif
-                    break;
-                }
-                else {
-                    // We're in H and can't go anywhere.
-                    fprintf(stderr, "error:[gssw] Stuck in main matrix!\n");
-                    assert(0);
-                }
-            }
+            
         }
     }
-
     *score = scoreHere;
     *refEnd = i;
     *readEnd = j;
@@ -1455,6 +1530,9 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
 #endif
             int8_t internal_match = 0;
             if (i > 0 && j > 0) {
+#ifdef DEBUG_TRACEBACK
+                fprintf(stderr, "from mH = %d, mE = %d, mF = %d\n", mH[readLen*(i-1) + (j-1)], mE[readLen*(i-1) + (j-1)], mH[readLen*(i-1) + (j-1)]);
+#endif
                 if (mH[readLen*(i-1) + (j-1)] + align_score == scoreHere) {
                     scoreHere -= align_score;
                     if (ref[i] == 'N' || read[j] == 'N') {
@@ -1645,6 +1723,8 @@ gssw_graph_mapping* gssw_graph_trace_back_internal (gssw_graph* graph,
         qual_num = gssw_create_qual_num(qual, readLen);
     }
     
+    //fprintf(stderr, "gssw: trace_back %s\n", read);
+    
     // Make a graph and get its cigar
     gssw_graph_mapping* gm = gssw_graph_mapping_create();
     gssw_graph_cigar* gc = &gm->cigar;
@@ -1809,7 +1889,8 @@ gssw_graph_mapping* gssw_graph_trace_back_internal (gssw_graph* graph,
                 // node, we would have.
                 
 #ifdef DEBUG_TRACEBACK
-                fprintf(stderr, "Consider prev node %p with score %i, %c vs %c, %i diagonal, %i open, %i extend\n", cn, score, refChar, readChar, diagonalSourceScore, gapOpenSourceScore, gapExtendSourceScore);
+                fprintf(stderr, "Consider prev node %d of %d: %p with score %i, %c vs %c, %i diagonal, %i open, %i extend\n", i + 1, n->count_prev, cn, score, refChar, readChar, diagonalSourceScore, gapOpenSourceScore, gapExtendSourceScore);
+                fprintf(stderr, "Node sequence: %s\n", cn->seq);
 #endif
                 
                 if(!gapInRead) {
@@ -1872,8 +1953,8 @@ gssw_graph_mapping* gssw_graph_trace_back_internal (gssw_graph* graph,
 #ifdef DEBUG_TRACEBACK
                         fprintf(stderr, "Gap extend across nodes to %p\n", cn);
 #endif
+                        break;
                     }
-                    break;
                 }
             }
             // Once we go through all the possible previous nodes, we sure hope we found something consistent.
@@ -2281,7 +2362,7 @@ gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t coun
     int32_t j = 0, k = 0;
     for (k = 0; k < count; ++k) {
         if (!prev[k]->alignment) {
-            fprintf(stderr, "cannot align because node predecessors cannot provide seed\n");
+            fprintf(stderr, "error:[gssw] cannot align because node predecessors cannot provide seed\n");
             fprintf(stderr, "failing is node %u\n", prev[k]->id);
             exit(1);
         }
@@ -2353,13 +2434,12 @@ gssw_graph_fill_internal (gssw_graph* graph,
                           const uint8_t weight_gapE,
                           const int32_t maskLen,
                           const int8_t score_size) {
-    
     int32_t read_length = strlen(read_seq);
     int8_t* read_num = gssw_create_num(read_seq, read_length, nt_table);
     int8_t* qual_num = gssw_create_qual_num(read_qual, read_length);
     gssw_profile* prof;
-    if (read_qual != NULL) {
-        prof = gssw_qual_adj_init (read_num, qual_num, read_length, score_matrix, 5);
+    if (read_qual) {
+        prof = gssw_qual_adj_init (read_num, qual_num, read_length, score_matrix, 5, score_size);
     }
     else {
         prof = gssw_init(read_num, read_length, score_matrix, 5, score_size);
@@ -2388,7 +2468,13 @@ gssw_graph_fill_internal (gssw_graph* graph,
             free(read_num);
             free(qual_num);
             gssw_profile_destroy(prof);
-            return gssw_graph_fill(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE, maskLen, 1);
+            if (read_qual) {
+                return gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, score_matrix, weight_gapO,
+                                                weight_gapE, maskLen, 1);
+            }
+            else {
+                return gssw_graph_fill(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE, maskLen, 1);
+            }
         } else {
             if (!graph->max_node || n->alignment->score1 > max_score) {
                 graph->max_node = n;
@@ -2431,10 +2517,11 @@ gssw_graph_fill_qual_adj(gssw_graph* graph,
                          const int8_t* adj_score_matrix,
                          const uint8_t weight_gapO,
                          const uint8_t weight_gapE,
-                         const int32_t maskLen) {
+                         const int32_t maskLen,
+                         const int8_t score_size) {
 
     return gssw_graph_fill_internal(graph, read_seq, read_qual, nt_table, adj_score_matrix,
-                                    weight_gapO, weight_gapE, maskLen, 1);
+                                    weight_gapO, weight_gapE, maskLen, score_size);
 }
 
 
@@ -2699,7 +2786,7 @@ double gssw_alignment_partition_func(double lam, const int8_t* score_matrix, con
 double gssw_recover_log_base(const int8_t* score_matrix, const double* char_freqs, uint32_t alphabet_size, double tol) {
 
     if (!gssw_verify_valid_log_odds_score_matrix(score_matrix, char_freqs, alphabet_size)) {
-        fprintf(stderr, "error:[gssw] score matrix does not correspond to log-odds of any distribution. cannot adjust for base quality.\n");
+        fprintf(stderr, "error:[gssw] score matrix does not correspond to log-odds of any distribution, cannot adjust for base quality.\n");
         exit(EXIT_FAILURE);
     }
     
@@ -2713,7 +2800,7 @@ double gssw_recover_log_base(const int8_t* score_matrix, const double* char_freq
     double partition = gssw_alignment_partition_func(lam, score_matrix, char_freqs, alphabet_size);
     if (partition < 1.0) {
         lower_bound = lam;
-        while (partition < 1.0) {
+        while (partition <= 1.0) {
             lower_bound = lam;
             lam *= 2.0;
             partition = gssw_alignment_partition_func(lam, score_matrix, char_freqs, alphabet_size);
@@ -2730,7 +2817,6 @@ double gssw_recover_log_base(const int8_t* score_matrix, const double* char_freq
         lower_bound = lam;
     }
     
-    
     // bisect to find a log base where total probability is 1
     while (upper_bound / lower_bound - 1.0 > tol) {
         lam = 0.5 * (lower_bound + upper_bound);
@@ -2743,6 +2829,24 @@ double gssw_recover_log_base(const int8_t* score_matrix, const double* char_freq
     }
 
     return 0.5 * (lower_bound + upper_bound);
+}
+
+double gssw_dna_recover_log_base(int8_t match, int8_t mismatch, double gc_content, double tol) {
+    double gc_freq = gc_content / 2.0;
+    double at_freq = 0.5 - gc_freq;
+    double* nt_freqs = (double*) malloc(sizeof(double) * 4);
+    nt_freqs[0] = at_freq; nt_freqs[1] = gc_freq; nt_freqs[2] = gc_freq; nt_freqs[3] = at_freq;
+    int8_t* score_matrix = (int8_t*) malloc(sizeof(int8_t) * 16);
+    int32_t i, j;
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < 4; j++) {
+            score_matrix[i * 4 + j] = (i == j) ? match : -mismatch;
+        }
+    }
+    double log_base = gssw_recover_log_base(score_matrix, nt_freqs, 4, 1e-12);
+    free(nt_freqs);
+    free(score_matrix);
+    return log_base;
 }
 
 /* Returns a 3-dimensional matrix of quality-adjusted scores indexed by (qual score) x (ref base) x (query base). */
@@ -2790,9 +2894,9 @@ int8_t* gssw_adjusted_qual_matrix(uint8_t max_qual, const int8_t* score_matrix, 
     
     // compute the adjusted alignment scores for each quality level
     int8_t* adj_qual_mat = (int8_t*) calloc(mat_size * (max_qual + (int8_t) 1), sizeof(int8_t));
-    double score;
+    double score, err;
     for (q = lowest_meaningful_qual; q <= max_qual; q++) {
-        double err = pow(10.0, -q / 10.0);
+        err = pow(10.0, -q / 10.0);
         for (i = 0; i < alphabet_size; i++) {
             for (j = 0; j < alphabet_size; j++) {
                 score = log(((1.0 - err) * align_prob[i * alphabet_size + j] + (err / (alphabet_size - 1.0)) * align_complement_prob[i * alphabet_size + j])
@@ -2811,7 +2915,7 @@ int8_t* gssw_adjusted_qual_matrix(uint8_t max_qual, const int8_t* score_matrix, 
 
 /* Returns a 3-dimensional matrix of quality-adjusted scores indexed by (qual score) x (ref base) x (query base)
  * that have been scaled up to (at most) a max score to accentuate differences, also adjusts value of gap penalties. */
-int8_t* gssw_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, uint8_t* gap_open_out, uint8_t* gap_extend_out,
+int8_t* gssw_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, int8_t* gap_open_out, int8_t* gap_extend_out,
                                          const int8_t* score_matrix, const double* char_freqs, uint32_t alphabet_size,
                                          double tol) {
 
@@ -2881,8 +2985,8 @@ int8_t* gssw_add_ambiguous_char_to_adjusted_matrix(int8_t* adj_mat, uint8_t max_
 }
 
 // automatically adds 0-scoring N to the final row and column
-int8_t* gssw_dna_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, uint8_t* gap_open_out,
-                                             uint8_t* gap_extend_out, int8_t match_score, int8_t mismatch_score,
+int8_t* gssw_dna_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, int8_t* gap_open_out,
+                                             int8_t* gap_extend_out, int8_t match_score, int8_t mismatch_score,
                                              double gc_content, double tol) {
     
     double gc_freq = gc_content / 2.0;

@@ -23,8 +23,7 @@ void remove_phred_offset(char* qual_str) {
 //	Align a pair of genome sequences.
 int main (int argc, char * const argv[]) {
     // default parameters for genome sequence alignment
-    int8_t match = 2, mismatch = 2;
-    uint8_t gap_open = 3, gap_extension = 1;
+    int8_t match = 2, mismatch = 2, gap_open = 3, gap_extension = 1;
     // from Mengyao's example about the importance of using all three matrices in traceback.
     // int32_t l, m, k, match = 2, mismatch = 1, gap_open = 2, gap_extension = 1;
     
@@ -50,7 +49,7 @@ int main (int argc, char * const argv[]) {
 	//	0  0  0  0  0	N (or other ambiguous code)
     
     int8_t max_score = 32;
-    int8_t max_qual = 40;
+    uint8_t max_qual = 40;
     double gc_content = 0.6;
     double tol = 1e-12;
     
@@ -78,7 +77,7 @@ int main (int argc, char * const argv[]) {
     gssw_graph_add_node(graph, nodes[2]);
     gssw_graph_add_node(graph, nodes[3]);
     
-    gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, adj_mat, gap_open, gap_extension, 15);
+    gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, adj_mat, gap_open, gap_extension, 15, 2);
     gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
     gssw_graph_mapping* gm = gssw_graph_trace_back_qual_adj (graph,
                                                              read_seq,
