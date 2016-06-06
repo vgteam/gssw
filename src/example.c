@@ -15,8 +15,8 @@
 //	Align a pair of genome sequences.
 int main (int argc, char * const argv[]) {
     // default parameters for genome sequence alignment
-    int8_t match = 20, mismatch = 80;
-    uint8_t gap_open = 120, gap_extension = 20;
+    int8_t match = 1, mismatch = 4;
+    uint8_t gap_open = 6, gap_extension = 1;
     // from Mengyao's example about the importance of using all three matrices in traceback.
     // int32_t l, m, k, match = 2, mismatch = 1, gap_open = 2, gap_extension = 1;
 

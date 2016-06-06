@@ -53,7 +53,7 @@ typedef struct gssw_profile gssw_profile;
 // run through *that* matrix in rows. Each row is an SSE 128-bit chunk, and is
 // processed all at once.
 
-// Another way to think of the layout is to have 16 or 8 cursors moving down) the
+// Another way to think of the layout is to have 16 or 8 cursors moving down the
 // column in parallel. Each cursor has easy access to the contents of the cell
 // above it, except for the first one (which is fixed with some fix-up logic
 // called the "lazy F loop").
