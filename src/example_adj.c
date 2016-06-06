@@ -40,19 +40,21 @@ int main (int argc, char * const argv[]) {
 	/* This table is used to transform nucleotide letters into numbers. */
     int8_t* nt_table = gssw_create_nt_table();
     
-	// initialize scoring matrix for genome sequences
+	// initialize adjusted scoring matrices for genome sequences
+    
+    // with full base quality, the matrix will be proportional to
 	//  A  C  G  T	N (or other ambiguous code)
 	//  2 -2 -2 -2 	0	A
 	// -2  2 -2 -2 	0	C
 	// -2 -2  2 -2 	0	G
 	// -2 -2 -2  2 	0	T
-	//	0  0  0  0  0	N (or other ambiguous code)
+	//  0  0  0  0  0	N (or other ambiguous code)
+    // scores shrink toward 0 with lower base quality
     
-    int8_t max_score = 32;
-    uint8_t max_qual = 40;
+    int8_t max_score = 32; // scores can be scaled to larger values automatically for improved sensitivity
+    uint8_t max_qual = 40; // maximum base quality value to compute adjusted scores for
     double gc_content = 0.6;
     double tol = 1e-12;
-    
     int8_t* adj_mat = gssw_dna_scaled_adjusted_qual_matrix(max_score, max_qual, &gap_open,
                                                            &gap_extension, match, mismatch,
                                                            gc_content, tol);
