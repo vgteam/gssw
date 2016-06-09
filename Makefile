@@ -7,10 +7,11 @@ LIB_DIR:=lib
 
 OBJ=gssw.o
 EXE=gssw_example
+EXEADJ= gssw_example_adj
 
 .PHONY:all clean cleanlocal pre
 
-all:$(BIN_DIR)/$(EXE) $(LIB_DIR)/libgssw.a
+all:$(BIN_DIR)/$(EXE) $(BIN_DIR)/$(EXEADJ) $(LIB_DIR)/libgssw.a
 
 pre:
 	mkdir -p bin
@@ -19,6 +20,9 @@ pre:
 
 $(BIN_DIR)/$(EXE):$(OBJ_DIR)/$(OBJ) $(SRC_DIR)/example.c pre
 	$(CC) $(CFLAGS) $(SRC_DIR)/example.c -o $@ $< -lm -lz
+
+$(BIN_DIR)/$(EXEADJ):$(OBJ_DIR)/$(OBJ) $(SRC_DIR)/example_adj.c pre
+	$(CC) $(CFLAGS) $(SRC_DIR)/example_adj.c -o $@ $< -lm -lz
 
 $(OBJ_DIR)/$(OBJ):$(SRC_DIR)/gssw.h pre
 	$(CC) $(CFLAGS) -c -o $@ $(SRC_DIR)/gssw.c

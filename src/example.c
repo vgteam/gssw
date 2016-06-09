@@ -15,7 +15,8 @@
 //	Align a pair of genome sequences.
 int main (int argc, char * const argv[]) {
     // default parameters for genome sequence alignment
-	int32_t match = 2, mismatch = 2, gap_open = 3, gap_extension = 1;
+    int8_t match = 1, mismatch = 4;
+    uint8_t gap_open = 6, gap_extension = 1;
     // from Mengyao's example about the importance of using all three matrices in traceback.
     // int32_t l, m, k, match = 2, mismatch = 1, gap_open = 2, gap_extension = 1;
 
@@ -35,21 +36,20 @@ int main (int argc, char * const argv[]) {
 	// -2 -2  2 -2 	0	G
 	// -2 -2 -2  2 	0	T
 	//	0  0  0  0  0	N (or other ambiguous code)
-	int8_t* mat = gssw_create_score_matrix(match, mismatch);
+    int8_t* mat = gssw_create_score_matrix(match, mismatch);
 
     gssw_node* nodes[4];
     nodes[0] = (gssw_node*)gssw_node_create("A", 1, ref_seq_1, nt_table, mat);
     nodes[1] = (gssw_node*)gssw_node_create("B", 2, ref_seq_2, nt_table, mat);
     nodes[2] = (gssw_node*)gssw_node_create("C", 3, ref_seq_3, nt_table, mat);
     nodes[3] = (gssw_node*)gssw_node_create("D", 4, ref_seq_4, nt_table, mat);
-
+    
     // makes a diamond
     gssw_nodes_add_edge(nodes[0], nodes[1]);
     gssw_nodes_add_edge(nodes[0], nodes[2]);
     gssw_nodes_add_edge(nodes[1], nodes[3]);
     gssw_nodes_add_edge(nodes[2], nodes[3]);
-
-
+    
     gssw_graph* graph = gssw_graph_create(4);
     //memcpy((void*)graph->nodes, (void*)nodes, 4*sizeof(gssw_node*));
     //graph->size = 4;
@@ -57,14 +57,14 @@ int main (int argc, char * const argv[]) {
     gssw_graph_add_node(graph, nodes[1]);
     gssw_graph_add_node(graph, nodes[2]);
     gssw_graph_add_node(graph, nodes[3]);
-
+    
     gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 15, 2);
     gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
     gssw_graph_mapping* gm = gssw_graph_trace_back (graph,
                                                     read_seq,
                                                     strlen(read_seq),
-                                                    match,
-                                                    mismatch,
+                                                    nt_table,
+                                                    mat,
                                                     gap_open,
                                                     gap_extension);
 

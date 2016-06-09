@@ -197,8 +197,6 @@ typedef struct {
     gssw_graph_cigar cigar;
 } gssw_graph_mapping;
 
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -222,6 +220,30 @@ extern "C" {
 			mat is the pointer to the array {2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2}
 */
 gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n, const int8_t score_size);
+
+/*!	@function	Create the quality-score adjusted query profile using the query sequence and its quality scores.
+	@param	read        pointer to the query sequence; the query sequence needs to be numbers
+	@param	readLen     length of the query sequence
+	@param	adj_mat     pointer to the adjusted substitution matrix; mat needs to be corresponding to the read sequence
+                            - see gssw_adjusted_qual_matrix and gssw_scaled_adjusted_qual_matrix
+	@param	n           the square root of the number of elements in mat (mat has n*n elements)
+	@param	score_size  estimated Smith-Waterman score; if your estimated best alignment score is surely < 255 please set 0; if
+                        your estimated best alignment score >= 255, please set 1; if you don't know, please set 2
+	@return	pointer to the query profile structure
+	@note	example for parameter read and mat:
+			If the query sequence is: ACGTATC, the sequence that read points to can be: 1234142
+			Then if the penalty for match is 2 and for mismatch is -2, the substitution matrix of parameter mat will be:
+			//A  C  G  T
+			  2 -2 -2 -2 //A
+			 -2  2 -2 -2 //C
+			 -2 -2  2 -2 //G
+			 -2 -2 -2  2 //T
+			mat is the pointer to the array {2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2}
+	@note   score_size option from gssw_init is implicitly set to 1 since adjusted scores should be scaled to as large
+            of value as possible anyway to increase sensitivity
+*/
+gssw_profile* gssw_qual_adj_init (const int8_t* read, const int8_t* qual, const int32_t readLen, const int8_t* adj_mat,
+                                  const int32_t n, const int8_t score_size);
 
 /*!	@function	Release the memory allocated by function ssw_init.
 	@param	p	pointer to the query profile structure
@@ -354,11 +376,12 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
+                                            int8_t* qual_num,
                                             int32_t readLen,
-                                            int32_t match,
-                                            int32_t mismatch,
-                                            int32_t gap_open,
-                                            int32_t gap_extension);
+                                            int8_t* nt_table,
+                                            int8_t* score_matrix,
+                                            uint8_t gap_open,
+                                            uint8_t gap_extension);
 
 gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
                                             uint16_t* score,
@@ -369,11 +392,12 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
                                             const char* ref,
                                             int32_t refLen,
                                             const char* read,
+                                            int8_t* qual_num,
                                             int32_t readLen,
-                                            int32_t match,
-                                            int32_t mismatch,
-                                            int32_t gap_open,
-                                            int32_t gap_extension);
+                                            int8_t* nt_table,
+                                            int8_t* score_matrix,
+                                            uint8_t gap_open,
+                                            uint8_t gap_extension);
 
 gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        uint16_t* score,
@@ -384,21 +408,31 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        const char* ref,
                                        int32_t refLen,
                                        const char* read,
+                                       int8_t* qual_num,
                                        int32_t readLen,
-                                       int32_t match,
-                                       int32_t mismatch,
-                                       int32_t gap_open,
-                                       int32_t gap_extension);
+                                       int8_t* nt_table,
+                                       int8_t* score_matrix,
+                                       uint8_t gap_open,
+                                       uint8_t gap_extension);
 
 // Compute and return the traceback from a graph for which the alignment DP has been performed.
 gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                            const char* read,
                                            int32_t readLen,
-                                           int32_t match,
-                                           int32_t mismatch,
-                                           int32_t gap_open,
-                                           int32_t gap_extension);
+                                           int8_t* nt_table,
+                                           int8_t* score_matrix,
+                                           uint8_t gap_open,
+                                           uint8_t gap_extension);
     
+gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
+                                                    const char* read,
+                                                    const char* qual,
+                                                    int32_t readLen,
+                                                    int8_t* nt_table,
+                                                    int8_t* adj_score_matrix,
+                                                    uint8_t gap_open,
+                                                    uint8_t gap_extension);
+
 /*! @function         Return 1 if the alignment is in 16/128bit (byte sized) or 0 if word-sized.
     @param alignment  Alignment structure.
 */
@@ -456,6 +490,17 @@ gssw_graph_fill (gssw_graph* graph,
                  const int32_t maskLen,
                  const int8_t score_size);
 
+gssw_graph*
+gssw_graph_fill_qual_adj(gssw_graph* graph,
+                         const char* read_seq,
+                         const char* read_qual,
+                         const int8_t* nt_table,
+                         const int8_t* adj_score_matrix,
+                         const uint8_t weight_gapO,
+                         const uint8_t weight_gapE,
+                         const int32_t maskLen,
+                         const int8_t score_size);
+    
 gssw_graph* gssw_graph_create(uint32_t size);
 int32_t gssw_graph_add_node(gssw_graph* graph,
                             gssw_node* node);
@@ -481,7 +526,70 @@ int8_t* gssw_create_nt_table(void);
 int8_t* gssw_create_num(const char* seq,
                         const int32_t len,
                         const int8_t* nt_table);
+int8_t* gssw_create_qual_num(const char* qual,
+                             const int32_t len);
+int8_t gssw_max_qual(const int8_t* qual,
+                      const int32_t len);
+
     
+/* Numerically computes the base of the logarithm in the log-odds interpretation of the scoring matrix */
+double gssw_recover_log_base(const int8_t* score_matrix, const double* char_freqs, uint32_t alphabet_size, double tol);
+/* Convenient wrapper for DNA matrices */
+double gssw_dna_recover_log_base(int8_t match, int8_t mismatch, double gc_content, double tol);
+    
+// functions for adjusting alignments for base quality (see also gssw_qual_adj_init)
+
+/*! @function   Create a base-quality adjusted scoring matrix to use across reads
+ *  @param  max_qual         highest quality score to compute adjustments for
+ *  @param  gap_open         gap open penalty
+ *  @param  gap_extend       gap extend penalty
+ *  @param  score_matrix     match score matrix
+ *                              - should be of length alphabet_size * alphabet_size
+ *                              - query sequences correspond to columns
+ *  @param  char_freqs       frequency of characters in the alphabet
+ *                              - should be of length alphabet_size
+ *                              - should sum to 1
+ *  @param  alphabet_size    number of characters in alphabet
+ *  @param  tol              numerical tolerance for computing base of logarithm underlying log-odds scores
+ *                              - recommended, 1e-14 to 1e-12
+ *  @return                  pointer to the adjusted matrix
+ *  @note   matrix is indexed by (qual_score) x (ref_char) x (query_char)
+ */
+int8_t* gssw_adjusted_qual_matrix(uint8_t max_qual, const int8_t* score_matrix, const double* char_freqs,
+                                  uint32_t alphabet_size, double tol);
+
+/*! @function   Create a scaled base-quality adjusted scoring matrix to use across reads (scaling improves sensitivity)
+ *  @param  max_score        highest score to scale to
+ *  @param  max_qual         highest quality score to compute adjustments for
+ *  @param  gap_open_out     address of gap open penalty (will be modified)
+ *  @param  gap_extend_out   address of gap extend penalty (will be modified)
+ *  @param  score_matrix     match score matrix
+ *                              - should be of length alphabet_size * alphabet_size
+ *                              - query sequences correspond to columns
+ *  @param  char_freqs       frequency of characters in the alphabet
+ *                              - should be of length alphabet_size
+ *                              - should sum to 1
+ *  @param  alphabet_size    number of characters in alphabet
+ *  @param  tol              numerical tolerance for computing base of logarithm underlying log-odds scores
+ *                              - recommended, 1e-14 to 1e-12
+ *  @return                  pointer to the adjusted matrix
+ *  @note   The scores located at gap_open_out and gap_extend_out will be modified
+ *  @note   matrix is indexed by (qual_score) x (ref_char) x (query_char)
+ */
+int8_t* gssw_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, int8_t* gap_open_out, int8_t* gap_extend_out,
+                                         const int8_t* score_matrix, const double* char_freqs, uint32_t alphabet_size,
+                                         double tol);
+
+/* Creates a new set of matrices with 0 scores in the final row/column for ambiguous characters */
+int8_t* gssw_add_ambiguous_char_to_adjusted_matrix(int8_t* adj_mat, uint8_t max_qual, uint32_t alphabet_size);
+    
+/* Wrapper for gssw_adjusted_qual_matrix using simple parameterization of char_freqs and score_matrix
+   Adds row and column of 0s for N bases automatically */
+int8_t* gssw_dna_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual, int8_t* gap_open_out,
+                                             int8_t* gap_extend_out, int8_t match_score, int8_t mismatch_score,
+                                             double gc_content, double tol);
+
+
 #ifdef __cplusplus
 }
 #endif	// __cplusplus
