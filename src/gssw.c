@@ -45,6 +45,8 @@
 #include <assert.h>
 #include "gssw.h"
 
+//#define DEBUG_TRACEBACK
+
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
 #define UNLIKELY(x) __builtin_expect((x),0)
@@ -901,6 +903,9 @@ gssw_align* gssw_fill (const gssw_profile* prof,
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
 		return 0;
 	}
+    
+    
+    
 	alignment->score1 = bests[0].score;
 	alignment->ref_end1 = bests[0].ref;
 	alignment->read_end1 = bests[0].read;
@@ -912,6 +917,7 @@ gssw_align* gssw_fill (const gssw_profile* prof,
 		alignment->ref_end2 = -1;
 	}
 	free(bests);
+    
 
 	return alignment;
 }
@@ -1709,6 +1715,7 @@ void gssw_reverse_graph_cigar(gssw_graph_cigar* c) {
 }
 
 gssw_graph_mapping* gssw_graph_trace_back_internal (gssw_graph* graph,
+                                                    gssw_node* pinned_node,
                                                     const char* read,
                                                     const char* qual,
                                                     int32_t readLen,
@@ -1737,25 +1744,54 @@ gssw_graph_mapping* gssw_graph_trace_back_internal (gssw_graph* graph,
     // And how much of it is used
     gc->length = 0;
 
-    // Find the best node to start the traceback from
-    gssw_node* n = graph->max_node;
+    // Start traceback from pinned node or from maximum scoring node
+    gssw_node* n;
+    if (pinned_node) {
+        n = pinned_node;
+    }
+    else {
+        n = graph->max_node;
+    }
+    
     if (!n) {
         fprintf(stderr, "error:[gssw] Cannot trace back because graph alignment has not been run.\n");
         fprintf(stderr, "error:[gssw] You must call graph_fill(...) before tracing back.\n");
         exit(1);
     }
     
-    // And the score that we have there
-    uint16_t score = n->alignment->score1;
-    gm->score = score;
-    
     // Are we using bytes, or did we have to do shorts?
     uint8_t score_is_byte = gssw_is_byte(n->alignment);
     
-    // Where in the reference and the read is the best place to trace back from
-    // in this node?
-    int32_t refEnd = n->alignment->ref_end1;
-    int32_t readEnd = n->alignment->read_end1;
+    int32_t refEnd;
+    int32_t readEnd;
+    uint16_t score;
+    if (pinned_node) {
+        // Get the coordinates of the score
+        refEnd = n->len - 1;
+        readEnd = readLen - 1;
+        
+        // Get the score in the bottom right corner
+        if (score_is_byte) {
+            uint8_t* mH = (uint8_t*) n->alignment->mH;
+            score = mH[readLen * refEnd + readEnd];
+        }
+        else {
+            uint16_t* mH = (uint16_t*) n->alignment->mH;
+            score = mH[readLen * refEnd + readEnd];
+        }
+    }
+    else {
+        // Where in the reference and the read is the best place to trace back from
+        // in this node?
+        refEnd = n->alignment->ref_end1;
+        readEnd = n->alignment->read_end1;
+        
+        // Get the best score at the node
+        score = n->alignment->score1;
+    }
+    
+    // Store score in graph mapping
+    gm->score = score;
     
     // We keep flags indicating if we're tracing along a gap in the reference or
     // a gap in the read. TODO: the gap in the reference flag doesn't really
@@ -2113,6 +2149,7 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                            uint8_t gap_open,
                                            uint8_t gap_extension) {
     return gssw_graph_trace_back_internal(graph,
+                                          NULL,
                                           read,
                                           NULL,
                                           readLen,
@@ -2131,6 +2168,46 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
                                                     uint8_t gap_open,
                                                     uint8_t gap_extension) {
     return gssw_graph_trace_back_internal(graph,
+                                          NULL,
+                                          read,
+                                          qual,
+                                          readLen,
+                                          nt_table,
+                                          adj_score_matrix,
+                                          gap_open,
+                                          gap_extension);
+}
+
+gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
+                                                  gssw_node* pinned_node,
+                                                  const char* read,
+                                                  int32_t readLen,
+                                                  int8_t* nt_table,
+                                                  int8_t* score_matrix,
+                                                  uint8_t gap_open,
+                                                  uint8_t gap_extension) {
+    return gssw_graph_trace_back_internal(graph,
+                                          pinned_node,
+                                          read,
+                                          NULL,
+                                          readLen,
+                                          nt_table,
+                                          score_matrix,
+                                          gap_open,
+                                          gap_extension);
+}
+
+gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
+                                                           gssw_node* pinned_node,
+                                                           const char* read,
+                                                           const char* qual,
+                                                           int32_t readLen,
+                                                           int8_t* nt_table,
+                                                           int8_t* adj_score_matrix,
+                                                           uint8_t gap_open,
+                                                           uint8_t gap_extension) {
+    return gssw_graph_trace_back_internal(graph,
+                                          pinned_node,
                                           read,
                                           qual,
                                           readLen,
@@ -2570,7 +2647,9 @@ gssw_node_fill (gssw_node* node,
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
 		return 0;
 	}
-
+    
+    //fprintf(stderr, "### best: score(%d), ref_end(%d), read_end(%d); 2nd best: score(%d), ref_end(%d), read_end(%d)\n", bests[0].score, bests[0].ref, bests[0].read, bests[1].score, bests[1].ref, bests[1].read);
+    
 	alignment->score1 = bests[0].score;
 	alignment->ref_end1 = bests[0].ref;
 	alignment->read_end1 = bests[0].read;

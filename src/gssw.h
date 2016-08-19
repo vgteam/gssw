@@ -433,6 +433,27 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
                                                     uint8_t gap_open,
                                                     uint8_t gap_extension);
 
+// Computes the traceback ending with the final character of the read aligned to the final character
+// of a given node
+gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
+                                                  gssw_node* pinned_node,
+                                                  const char* read,
+                                                  int32_t readLen,
+                                                  int8_t* nt_table,
+                                                  int8_t* score_matrix,
+                                                  uint8_t gap_open,
+                                                  uint8_t gap_extension);
+    
+gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
+                                                           gssw_node* pinned_node,
+                                                           const char* read,
+                                                           const char* qual,
+                                                           int32_t readLen,
+                                                           int8_t* nt_table,
+                                                           int8_t* adj_score_matrix,
+                                                           uint8_t gap_open,
+                                                           uint8_t gap_extension);
+
 /*! @function         Return 1 if the alignment is in 16/128bit (byte sized) or 0 if word-sized.
     @param alignment  Alignment structure.
 */

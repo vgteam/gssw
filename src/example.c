@@ -70,6 +70,19 @@ int main (int argc, char * const argv[]) {
 
     gssw_print_graph_mapping(gm, stdout);
     gssw_graph_mapping_destroy(gm);
+    
+    gssw_graph_mapping* gmp = gssw_graph_trace_back_pinned (graph,
+                                                            nodes[3],
+                                                            read_seq,
+                                                            strlen(read_seq),
+                                                            nt_table,
+                                                            mat,
+                                                            gap_open,
+                                                            gap_extension);
+    
+    gssw_print_graph_mapping(gmp, stdout);
+    gssw_graph_mapping_destroy(gmp);
+    
     // note that nodes which are referred to in this graph are destroyed as well
     gssw_graph_destroy(graph);
 
