@@ -2728,7 +2728,12 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
         
         // Get score that will be present in the matrix cell
         // note: can ignore the matrix field in the deflection because it is always safe to start in H matrix
-        if (score_is_byte) {
+        if (readEnd < 0 || refEnd < 0) {
+            // edge case that occurs when then entire matrix is 0s (then there is no max score so the initial values for
+            // refEnd and readEnd are retained)
+            score = 0;
+        }
+        else if (score_is_byte) {
             uint8_t* mH = (uint8_t*) n->alignment->mH;
             score = mH[readLen * refEnd + readEnd];
         }
