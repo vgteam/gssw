@@ -687,6 +687,9 @@ int8_t* gssw_dna_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual,
     
 /* Initializes a stack to keep track of top alternate alignments (up to the capacity) in score sorted order */
 gssw_multi_align_stack* gssw_new_multi_align_stack(int32_t capacity);
+    
+/* Destructor for the stack */
+void gssw_delete_multi_align_stack(gssw_multi_align_stack* stack);
 
 /* Constructor for a node on the stack */
 gssw_multi_align_stack_node* gssw_new_multi_align_stack_node(gssw_alternate_alignment_ends* alignment_suffix, int16_t score,

@@ -71,6 +71,7 @@ int main (int argc, char * const argv[]) {
     printf("Optimal local mapping:\n");
     gssw_print_graph_mapping(gm, stdout);
     gssw_graph_mapping_destroy(gm);
+
     
     gssw_graph_mapping* gmp = gssw_graph_trace_back_pinned (graph,
                                                             nodes[3],

@@ -2535,11 +2535,11 @@ gssw_graph_mapping* gssw_graph_mapping_create(void) {
 
 void gssw_graph_mapping_destroy(gssw_graph_mapping* m) {
     int32_t i;
-    gssw_graph_cigar* g = &m->cigar;
-    for (i = 0; i < g->length; ++i) {
-        gssw_cigar_destroy(g->elements[i].cigar);
+    // iterate through gssw_graph_cigar's gssw_node_cigars
+    for (i = 0; i < m->cigar.length; ++i) {
+        gssw_cigar_destroy(m->cigar.elements[i].cigar);
     }
-    free(g->elements);
+    free(m->cigar.elements);
     free(m);
 }
 
@@ -2638,7 +2638,6 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
     // Make the mappings
     gssw_graph_mapping** gms = (gssw_graph_mapping**) malloc(sizeof(gssw_graph_mapping*) * num_tracebacks);
     
-    // TODO: make sure any that don't get filled are initialized to the empy alignment
     int i;
     for (i = 0; i < num_tracebacks; i++) {
         gms[i] = gssw_graph_mapping_create();
@@ -2698,8 +2697,6 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
     null_suffix.num_deflections = 0;
     null_suffix.deflections = NULL;
     gssw_add_alignment(alt_alignment_stack, &null_suffix, score, readEnd, refEnd, NULL, n, Match, Match);
-    
-    // TODO: only look for alt alignments after final deflection
     
     // Iterate through alternate alignments in descending order of score
     int32_t traceback_idx;
@@ -3532,6 +3529,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
         
     }
     
+    gssw_delete_multi_align_stack(alt_alignment_stack);
     free(qual_num);
 
     return gms;
@@ -4564,6 +4562,16 @@ gssw_multi_align_stack* gssw_new_multi_align_stack(int32_t capacity) {
     stack->bottom_scoring = NULL;
     
     return stack;
+}
+
+void gssw_delete_multi_align_stack(gssw_multi_align_stack* stack) {
+    gssw_multi_align_stack_node* node = stack->bottom_scoring;
+    while (node != NULL) {
+        gssw_multi_align_stack_node* next = node->next;
+        gssw_delete_multi_align_stack_node(node);
+        node = next;
+    }
+    free(stack);
 }
 
 gssw_multi_align_stack_node* gssw_new_multi_align_stack_node(gssw_alternate_alignment_ends* alignment_suffix, int16_t score,
