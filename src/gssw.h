@@ -197,6 +197,41 @@ typedef struct {
     gssw_graph_cigar cigar;
 } gssw_graph_mapping;
 
+// matrices in the SSW algorithm
+typedef enum gssw_matrix_t {Match, ReadGap, RefGap} gssw_matrix_t;
+
+// position in the DP structure
+typedef struct {
+    int32_t read_pos;
+    int32_t ref_pos;
+    gssw_matrix_t from_matrix;
+    gssw_matrix_t to_matrix;
+    gssw_node* from_node;
+    gssw_node* to_node;
+} gssw_trace_back_deflection;
+
+// an array of positions where the traceback follows a suboptimal alignment
+typedef struct {
+    int16_t score;
+    gssw_trace_back_deflection* deflections; // first deflection should be the start coordinates
+    int32_t num_deflections;
+} gssw_alternate_alignment_ends;
+
+// a linked list of top alternate alignments
+typedef struct gssw_multi_align_stack_node {
+    gssw_alternate_alignment_ends* alt_alignment;
+    struct gssw_multi_align_stack_node* next;
+    struct gssw_multi_align_stack_node* prev;
+} gssw_multi_align_stack_node;
+
+typedef struct {
+    int32_t current_size;
+    int32_t capacity;
+    gssw_multi_align_stack_node* bottom_scoring;
+    gssw_multi_align_stack_node* top_scoring;
+} gssw_multi_align_stack;
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -367,39 +402,13 @@ void gssw_graph_print_stderr(gssw_graph* graph);
     @param alignment  Alignment structure.
     @param end        Alignment ending position.
 */
-gssw_cigar* gssw_alignment_trace_back_byte (gssw_align* alignment,
-                                            uint16_t* score,
-                                            int32_t* refEnd,
-                                            int32_t* readEnd,
-                                            int32_t* refGapFlag,
-                                            int32_t* readGapFlag,
-                                            const char* ref,
-                                            int32_t refLen,
-                                            const char* read,
-                                            int8_t* qual_num,
-                                            int32_t readLen,
-                                            int8_t* nt_table,
-                                            int8_t* score_matrix,
-                                            uint8_t gap_open,
-                                            uint8_t gap_extension);
-
-gssw_cigar* gssw_alignment_trace_back_word (gssw_align* alignment,
-                                            uint16_t* score,
-                                            int32_t* refEnd,
-                                            int32_t* readEnd,
-                                            int32_t* refGapFlag,
-                                            int32_t* readGapFlag,
-                                            const char* ref,
-                                            int32_t refLen,
-                                            const char* read,
-                                            int8_t* qual_num,
-                                            int32_t readLen,
-                                            int8_t* nt_table,
-                                            int8_t* score_matrix,
-                                            uint8_t gap_open,
-                                            uint8_t gap_extension);
-
-gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
+    
+    
+gssw_cigar* gssw_alignment_trace_back (gssw_node* node,
+                                       gssw_multi_align_stack* alt_alignment_stack,
+                                       gssw_alternate_alignment_ends* alignment_deflections,
+                                       int32_t* deflection_idx,
+                                       int32_t final_traceback,
                                        uint16_t* score,
                                        int32_t* refEnd,
                                        int32_t* readEnd,
@@ -414,6 +423,46 @@ gssw_cigar* gssw_alignment_trace_back (gssw_align* alignment,
                                        int8_t* score_matrix,
                                        uint8_t gap_open,
                                        uint8_t gap_extension);
+    
+gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
+                                            gssw_multi_align_stack* alt_alignment_stack,
+                                            gssw_alternate_alignment_ends* alignment_deflections,
+                                            int32_t* deflection_idx,
+                                            int32_t final_traceback,
+                                            uint16_t* score,
+                                            int32_t* refEnd,
+                                            int32_t* readEnd,
+                                            int32_t* refGapFlag,
+                                            int32_t* readGapFlag,
+                                            const char* ref,
+                                            int32_t refLen,
+                                            const char* read,
+                                            int8_t* qual_num,
+                                            int32_t readLen,
+                                            int8_t* nt_table,
+                                            int8_t* score_matrix,
+                                            uint8_t gap_open,
+                                            uint8_t gap_extension);
+
+gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
+                                            gssw_multi_align_stack* alt_alignment_stack,
+                                            gssw_alternate_alignment_ends* alignment_deflections,
+                                            int32_t* deflection_idx,
+                                            int32_t final_traceback,
+                                            uint16_t* score,
+                                            int32_t* refEnd,
+                                            int32_t* readEnd,
+                                            int32_t* refGapFlag,
+                                            int32_t* readGapFlag,
+                                            const char* ref,
+                                            int32_t refLen,
+                                            const char* read,
+                                            int8_t* qual_num,
+                                            int32_t readLen,
+                                            int8_t* nt_table,
+                                            int8_t* score_matrix,
+                                            uint8_t gap_open,
+                                            uint8_t gap_extension);
 
 // Compute and return the traceback from a graph for which the alignment DP has been performed.
 gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
@@ -433,6 +482,52 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
                                                     uint8_t gap_open,
                                                     uint8_t gap_extension);
 
+// Computes the traceback ending with the final character of the read aligned to the final character
+// of a given node
+gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
+                                                  gssw_node* pinned_node,
+                                                  const char* read,
+                                                  int32_t readLen,
+                                                  int8_t* nt_table,
+                                                  int8_t* score_matrix,
+                                                  uint8_t gap_open,
+                                                  uint8_t gap_extension);
+    
+gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
+                                                           gssw_node* pinned_node,
+                                                           const char* read,
+                                                           const char* qual,
+                                                           int32_t readLen,
+                                                           int8_t* nt_table,
+                                                           int8_t* adj_score_matrix,
+                                                           uint8_t gap_open,
+                                                           uint8_t gap_extension);
+
+// Computes an arbitrary number of highest scoring tracebacks ending with the final character of the
+// read aligned to the final character of a given node
+gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
+                                                         gssw_node* pinned_node,
+                                                         int32_t num_tracebacks,
+                                                         const char* read,
+                                                         int32_t readLen,
+                                                         int8_t* nt_table,
+                                                         int8_t* score_matrix,
+                                                         uint8_t gap_open,
+                                                         uint8_t gap_extension);
+
+gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* graph,
+                                                                  gssw_node* pinned_node,
+                                                                  int32_t num_tracebacks,
+                                                                  const char* read,
+                                                                  const char* qual,
+                                                                  int32_t readLen,
+                                                                  int8_t* nt_table,
+                                                                  int8_t* adj_score_matrix,
+                                                                  uint8_t gap_open,
+                                                                  uint8_t gap_extension);
+
+
+    
 /*! @function         Return 1 if the alignment is in 16/128bit (byte sized) or 0 if word-sized.
     @param alignment  Alignment structure.
 */
@@ -589,7 +684,30 @@ int8_t* gssw_dna_scaled_adjusted_qual_matrix(int8_t max_score, uint8_t max_qual,
                                              int8_t* gap_extend_out, int8_t match_score, int8_t mismatch_score,
                                              double gc_content, double tol);
 
+    
+/* Initializes a stack to keep track of top alternate alignments (up to the capacity) in score sorted order */
+gssw_multi_align_stack* gssw_new_multi_align_stack(int32_t capacity);
+    
+/* Destructor for the stack */
+void gssw_delete_multi_align_stack(gssw_multi_align_stack* stack);
 
+/* Constructor for a node on the stack */
+gssw_multi_align_stack_node* gssw_new_multi_align_stack_node(gssw_alternate_alignment_ends* alignment_suffix, int16_t score,
+                                                             int32_t read_pos, int32_t ref_pos, gssw_node* from_node,
+                                                             gssw_node* to_node, gssw_matrix_t from_matrix, gssw_matrix_t to_matrix);
+
+/* Destructor for a node on the stack */
+void gssw_delete_multi_align_stack_node(gssw_multi_align_stack_node* stack_node);
+
+/* Adds an alignment onto the stack if there is room or if it is higher scoring than any of the alignments currently in it */
+void gssw_add_alignment(gssw_multi_align_stack* stack, gssw_alternate_alignment_ends* alignment_suffix, int16_t score,
+                        int32_t read_pos, int32_t ref_pos, gssw_node* from_node, gssw_node* to_node, gssw_matrix_t from_matrix,
+                        gssw_matrix_t to_matrix);
+    
+/* Retuns the lowest score of an alternate alignment in the stack */
+int16_t gssw_min_alt_alignment_score(gssw_multi_align_stack* stack);
+    
+    
 #ifdef __cplusplus
 }
 #endif	// __cplusplus

@@ -23,7 +23,7 @@ void remove_phred_offset(char* qual_str) {
 //	Align a pair of genome sequences.
 int main (int argc, char * const argv[]) {
     // default parameters for genome sequence alignment
-    int8_t match = 2, mismatch = 2, gap_open = 3, gap_extension = 1;
+    int8_t match = 1, mismatch = 4, gap_open = 6, gap_extension = 1;
     // from Mengyao's example about the importance of using all three matrices in traceback.
     // int32_t l, m, k, match = 2, mismatch = 1, gap_open = 2, gap_extension = 1;
     
@@ -89,9 +89,46 @@ int main (int argc, char * const argv[]) {
                                                              adj_mat,
                                                              gap_open,
                                                              gap_extension);
-
+    
+    printf("Optimal local mapping:\n");
     gssw_print_graph_mapping(gm, stdout);
     gssw_graph_mapping_destroy(gm);
+    
+    gssw_graph_mapping* gmp = gssw_graph_trace_back_pinned_qual_adj (graph,
+                                                                     nodes[3],
+                                                                     read_seq,
+                                                                     read_qual,
+                                                                     strlen(read_seq),
+                                                                     nt_table,
+                                                                     adj_mat,
+                                                                     gap_open,
+                                                                     gap_extension);
+    
+    printf("Optimal pinned mapping:\n");
+    gssw_print_graph_mapping(gmp, stdout);
+    gssw_graph_mapping_destroy(gmp);
+    
+    int num_alts = 30;
+    gssw_graph_mapping** gmps = gssw_graph_trace_back_pinned_qual_adj_multi (graph,
+                                                                             nodes[3],
+                                                                             num_alts,
+                                                                             read_seq,
+                                                                             read_qual,
+                                                                             strlen(read_seq),
+                                                                             nt_table,
+                                                                             adj_mat,
+                                                                             gap_open,
+                                                                             gap_extension);
+    
+    printf("Best %d pinned mappings:\n", num_alts);
+    int j;
+    for (j = 0; j < num_alts; j++) {
+        gssw_print_graph_mapping(gmps[j], stdout);
+        gssw_graph_mapping_destroy(gmps[j]);
+    }
+    
+    free(gmps);
+    
     // note that nodes which are referred to in this graph are destroyed as well
     gssw_graph_destroy(graph);
 
