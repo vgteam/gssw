@@ -73,7 +73,8 @@ __m128i* gssw_qP_byte (const int8_t* read_num,
                        const int8_t* mat,
                        const int32_t readLen,
                        const int32_t n,	/* the edge length of the squre matrix mat */
-                       uint8_t bias) {
+                       uint8_t bias,
+                       int8_t pinned_full_length_bonus) {
 
 	int32_t segLen = (readLen + 15) / 16; /* Split the 128 bit register into 16 pieces.
 								     Each piece is 8 bit. Split the read into 16 segments.
@@ -82,10 +83,26 @@ __m128i* gssw_qP_byte (const int8_t* read_num,
 	__m128i* vProfile = (__m128i*)malloc(n * segLen * sizeof(__m128i));
 	int8_t* t = (int8_t*)vProfile;
 	int32_t nt, i, j, segNum;
-
+    
 	/* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
 	for (nt = 0; LIKELY(nt < n); nt ++) {
-		for (i = 0; i < segLen; i ++) {
+        
+        // special logic for first vector to add bonus for full length pinned alignment
+        if (segLen > 0) {
+            j = 0;
+            // add bonus to first position in first register (corresponds to first position in read)
+            *t = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias + pinned_full_length_bonus;
+            t++;
+            j += segLen;
+            // use normal score for the rest of the vector
+            for (segNum = 1; LIKELY(segNum < 16) ; segNum ++) {
+                *t = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias;
+                t++;
+                j += segLen;
+            }
+        }
+        
+		for (i = 1; i < segLen; i ++) {
 			j = i;
 			for (segNum = 0; LIKELY(segNum < 16) ; segNum ++) {
                 *t = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias;
@@ -102,7 +119,8 @@ __m128i* gssw_adj_qP_byte (const int8_t* read_num,
                            const int8_t* adj_mat,
                            const int32_t readLen,
                            const int32_t n,	/* the edge length of the squre matrix mat */
-                           uint8_t bias) {
+                           uint8_t bias,
+                           int8_t pinned_full_length_bonus) {
     
     int32_t segLen = (readLen + 15) / 16; /* Split the 128 bit register into 16 pieces.
                                            Each piece is 8 bit. Split the read into 16 segments.
@@ -112,11 +130,28 @@ __m128i* gssw_adj_qP_byte (const int8_t* read_num,
     int8_t* t = (int8_t*)vProfile;
     int32_t nt, i, j, segNum;
     
+    
     int32_t matSize = n * n;
     
     /* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
     for (nt = 0; LIKELY(nt < n); nt ++) {
-        for (i = 0; i < segLen; i ++) {
+        
+        // special logic for first vector to add bonus for full length pinned alignment
+        if (segLen > 0) {
+            j = 0;
+            // add bonus to first position in first register (corresponds to first position in read)
+            *t = j>= readLen ? bias : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + bias + pinned_full_length_bonus;
+            t++;
+            j += segLen;
+            // use normal score for the rest of the vector
+            for (segNum = 1; LIKELY(segNum < 16) ; segNum ++) {
+                *t = j>= readLen ? bias : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + bias;
+                t++;
+                j += segLen;
+            }
+        }
+        
+        for (i = 1; i < segLen; i ++) {
             j = i;
             for (segNum = 0; LIKELY(segNum < 16) ; segNum ++) {
                 *t = j>= readLen ? bias : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + bias;
@@ -125,6 +160,7 @@ __m128i* gssw_adj_qP_byte (const int8_t* read_num,
             }
         }
     }
+    
     return vProfile;
 }
 
@@ -473,9 +509,10 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
 }
 
 __m128i* gssw_qP_word (const int8_t* read_num,
-				  const int8_t* mat,
-				  const int32_t readLen,
-				  const int32_t n) {
+                       const int8_t* mat,
+                       const int32_t readLen,
+                       const int32_t n,
+                       int8_t pinned_full_length_bonus) {
 
 	int32_t segLen = (readLen + 7) / 8;
 	__m128i* vProfile = (__m128i*)malloc(n * segLen * sizeof(__m128i));
@@ -485,7 +522,22 @@ __m128i* gssw_qP_word (const int8_t* read_num,
 
 	/* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
 	for (nt = 0; LIKELY(nt < n); nt ++) {
-		for (i = 0; i < segLen; i ++) {
+        // special logic for first vector to add bonus for full length pinned alignment
+        if (segLen > 0) {
+            j = 0;
+            // add bonus to first position in first register (corresponds to first position in read)
+            *t = j>= readLen ? 0 : mat[nt * n + read_num[j]] + pinned_full_length_bonus;
+            t++;
+            j += segLen;
+            // use normal score for the rest of the vector
+            for (segNum = 1; LIKELY(segNum < 8) ; segNum ++) {
+                *t = j>= readLen ? 0 : mat[nt * n + read_num[j]];
+                t++;
+                j += segLen;
+            }
+        }
+        
+		for (i = 1; i < segLen; i ++) {
 			j = i;
 			for (segNum = 0; LIKELY(segNum < 8) ; segNum ++) {
                 *t = j>= readLen ? 0 : mat[nt * n + read_num[j]];
@@ -501,7 +553,8 @@ __m128i* gssw_adj_qP_word (const int8_t* read_num,
                            const int8_t* qual,
                            const int8_t* adj_mat,
                            const int32_t readLen,
-                           const int32_t n) {
+                           const int32_t n,
+                           int8_t pinned_full_length_bonus) {
 
     int32_t segLen = (readLen + 7) / 8;
     __m128i* vProfile = (__m128i*) malloc(n * segLen * sizeof(__m128i));
@@ -512,7 +565,22 @@ __m128i* gssw_adj_qP_word (const int8_t* read_num,
     
     /* Generate query profile rearrange query sequence & calculate the weight of match/mismatch */
     for (nt = 0; LIKELY(nt < n); nt++) {
-        for (i = 0; i < segLen; i++) {
+        
+        // special logic for first vector to add bonus for full length pinned alignment
+        if (segLen > 0) {
+            j = 0;
+            // add bonus to first position in first register (corresponds to first position in read)
+            *t = j>= readLen ? 0 : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + pinned_full_length_bonus;
+            t++;
+            j += segLen;
+            // use normal score for the rest of the vector
+            for (segNum = 1; LIKELY(segNum < 8) ; segNum ++) {
+                *t = j>= readLen ? 0 : adj_mat[qual[j] * matSize + nt * n + read_num[j]];
+                t++;
+                j += segLen;
+            }
+        }
+        for (i = 1; i < segLen; i++) {
             j = i;
             for (segNum = 0; LIKELY(segNum < 8) ; segNum++) {
                 *t = j>= readLen ? 0 : adj_mat[qual[j] * matSize + nt * n + read_num[j]];
@@ -521,6 +589,7 @@ __m128i* gssw_adj_qP_word (const int8_t* read_num,
             }
         }
     }
+    
     return vProfile;
 }
 
@@ -747,6 +816,7 @@ end:
             }
             //fprintf(stdout, "\n");
         }
+        
 
 		/* Record the max score of current column. */
 		//max8(maxColumn[i], vMaxColumn);
@@ -809,7 +879,8 @@ int8_t gssw_max_qual(const int8_t* qual, const int32_t len) {
     return max_qual;
 }
 
-gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n, const int8_t score_size) {
+gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n,
+                         int8_t pinned_full_length_bonus, const int8_t score_size) {
 	gssw_profile* p = (gssw_profile*)calloc(1, sizeof(struct gssw_profile));
 	p->profile_byte = 0;
 	p->profile_word = 0;
@@ -822,9 +893,10 @@ gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t
 		bias = abs(bias);
 
 		p->bias = bias;
-		p->profile_byte = gssw_qP_byte (read, mat, readLen, n, bias);
+		p->profile_byte = gssw_qP_byte (read, mat, readLen, n, bias, pinned_full_length_bonus);
 	}
-	if (score_size == 1 || score_size == 2) p->profile_word = gssw_qP_word (read, mat, readLen, n);
+	if (score_size == 1 || score_size == 2) p->profile_word = gssw_qP_word (read, mat, readLen, n,
+                                                                            pinned_full_length_bonus);
 	p->read = read;
 	p->mat = mat;
 	p->readLen = readLen;
@@ -832,10 +904,10 @@ gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t
 	return p;
 }
 
-/* Initiailize a profile with quality adjusted scores. Automatically selects score_size = 1 since adjusted scores should
- * be maximized to increase sensitity. */
+/* Initiailize a profile with quality adjusted scores. */
 gssw_profile* gssw_qual_adj_init (const int8_t* read, const int8_t* qual, const int32_t readLen, const int8_t* adj_mat,
-                                  const int32_t n, const int8_t score_size) {
+                                  const int32_t n, int8_t pinned_full_length_bonus, const int8_t score_size) {
+    
     gssw_profile* p = (gssw_profile*)calloc(1, sizeof(struct gssw_profile));
     p->profile_byte = 0;
     p->bias = 0;
@@ -848,10 +920,10 @@ gssw_profile* gssw_qual_adj_init (const int8_t* read, const int8_t* qual, const 
         bias = abs(bias);
         
         p->bias = bias;
-        p->profile_byte = gssw_adj_qP_byte (read, qual, adj_mat, readLen, n, bias);
+        p->profile_byte = gssw_adj_qP_byte (read, qual, adj_mat, readLen, n, bias, pinned_full_length_bonus);
     }
     if (score_size == 1 || score_size == 2) {
-        p->profile_word = gssw_adj_qP_word(read, qual, adj_mat, readLen, n);
+        p->profile_word = gssw_adj_qP_word(read, qual, adj_mat, readLen, n, pinned_full_length_bonus);
     }
     p->read = read;
     p->mat = adj_mat;
@@ -2627,8 +2699,13 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                                                      int8_t* nt_table,
                                                      int8_t* score_matrix,
                                                      uint8_t gap_open,
-                                                     uint8_t gap_extension) {
+                                                     uint8_t gap_extension,
+                                                     int8_t pinned_full_length_bonus) {
 
+#ifdef DEBUG_TRACEBACK
+    gssw_graph_print_score_matrices(graph, read, readLen, stderr);
+#endif
+    
     // Get quality score as integers
     int8_t* qual_num = NULL;
     if (qual) {
@@ -2963,13 +3040,46 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                     int32_t next_gap_in_ref = gapInRef;
                     
                     
+                    // If we were to match/mismatch, what characters are we comparing?
+                    char refChar = n->seq[refEnd];
+                    char readChar = read[readEnd];
+                    
+                    // And what is their score?
+                    int8_t align_score;
+                    if (qual_num) {
+                        align_score = score_matrix[qual_num[readEnd] * 25 + nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
+                    }
+                    else {
+                        align_score = score_matrix[nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
+                    }
+                    
+                    if (UNLIKELY(readEnd == 0)) {
+                        // The alignment received a bonus to its score for aligning the full length in pinned alignment.
+                        // If so, we can break here even though score is not 0
+                        if (score == pinned_full_length_bonus + align_score) {
+                            if (refChar == 'N' || readChar == 'N') {
+                                gssw_cigar_push_front(nc->cigar, 'N', 1);
+                            }
+                            else if (refChar == readChar) {
+                                gssw_cigar_push_front(nc->cigar, 'M', 1);
+                            }
+                            else {
+                                gssw_cigar_push_front(nc->cigar, 'X', 1);
+                            }
+                            refEnd--;
+                            readEnd--;
+                            break;
+                        }
+                        else if (score == pinned_full_length_bonus - gap_open) {
+                            gssw_cigar_push_front(nc->cigar, 'D', 1);
+                            readEnd--;
+                            break;
+                        }
+                    }
+                    
                     for (i = 0; i < n->count_prev; ++i) {
                         // Consider each node we could have come from
                         gssw_node* cn = n->prev[i];
-                        
-                        // If we were to match/mismatch, what characters are we comparing?
-                        char refChar = n->seq[refEnd];
-                        char readChar = read[readEnd];
                         
                         // What if we came diagonally on a match or mismatch? What score would we come from?
                         uint8_t diagonalSourceScore = ((uint8_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
@@ -2979,15 +3089,6 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                         
                         // And what if we came on a gap extend instead?
                         uint8_t gapExtendSourceScore = ((uint8_t*)cn->alignment->mE)[readLen*(cn->len-1) + readEnd];
-                        
-                        int8_t align_score;
-                        if (qual_num) {
-                            align_score = score_matrix[qual_num[readEnd] * 25 + nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
-                        }
-                        else {
-                            align_score = score_matrix[nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
-                        }
-                        
                         
                         // If we could have entered a read gap before leaving our last
                         // node, we would have.
@@ -3269,13 +3370,46 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                     int32_t next_gap_in_read = gapInRead;
                     int32_t next_gap_in_ref = gapInRef;
                     
+                    // If we were to match/mismatch, what characters are we comparing?
+                    char refChar = n->seq[refEnd];
+                    char readChar = read[readEnd];
+                    
+                    // And what is their score?
+                    int8_t align_score;
+                    if (qual_num) {
+                        align_score = score_matrix[qual_num[readEnd] * 25 + nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
+                    }
+                    else {
+                        align_score = score_matrix[nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
+                    }
+                    
+                    if (UNLIKELY(readEnd == 0)) {
+                        // The alignment received a bonus to its score for aligning the full length in pinned alignment.
+                        // If so, we can break here even though score is not 0
+                        if (score == pinned_full_length_bonus + align_score) {
+                            if (refChar == 'N' || readChar == 'N') {
+                                gssw_cigar_push_front(nc->cigar, 'N', 1);
+                            }
+                            else if (refChar == readChar) {
+                                gssw_cigar_push_front(nc->cigar, 'M', 1);
+                            }
+                            else {
+                                gssw_cigar_push_front(nc->cigar, 'X', 1);
+                            }
+                            refEnd--;
+                            readEnd--;
+                            break;
+                        }
+                        else if (score == pinned_full_length_bonus - gap_open) {
+                            gssw_cigar_push_front(nc->cigar, 'D', 1);
+                            readEnd--;
+                            break;
+                        }
+                    }
+                    
                     for (i = 0; i < n->count_prev; ++i) {
                         // Consider each node we could have come from
                         gssw_node* cn = n->prev[i];
-                        
-                        // If we were to match/mismatch, what characters are we comparing?
-                        char refChar = n->seq[refEnd];
-                        char readChar = read[readEnd];
                         
                         // What if we came diagonally on a match or mismatch? What score would we come from?
                         uint16_t diagonalSourceScore = ((uint16_t*)cn->alignment->mH)[readLen*(cn->len-1) + (readEnd-1)];
@@ -3285,15 +3419,6 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                         
                         // And what if we came on a gap extend instead?
                         uint16_t gapExtendSourceScore = ((uint16_t*)cn->alignment->mE)[readLen*(cn->len-1) + readEnd];
-                        
-                        int8_t align_score;
-                        if (qual_num) {
-                            align_score = score_matrix[qual_num[readEnd] * 25 + nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
-                        }
-                        else {
-                            align_score = score_matrix[nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
-                        }
-                        
                         
                         // If we could have entered a read gap before leaving our last
                         // node, we would have.
@@ -3553,7 +3678,8 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                                               nt_table,
                                                               score_matrix,
                                                               gap_open,
-                                                              gap_extension);
+                                                              gap_extension,
+                                                              0);
     gssw_graph_mapping* gm = gms[0];
     free(gms);
     return(gm);
@@ -3577,7 +3703,8 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
                                                               nt_table,
                                                               adj_score_matrix,
                                                               gap_open,
-                                                              gap_extension);
+                                                              gap_extension,
+                                                              0);
     gssw_graph_mapping* gm = gms[0];
     free(gms);
     return(gm);
@@ -3590,7 +3717,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
                                                   int8_t* nt_table,
                                                   int8_t* score_matrix,
                                                   uint8_t gap_open,
-                                                  uint8_t gap_extension) {
+                                                  uint8_t gap_extension,
+                                                  int8_t pinned_full_length_bonus) {
 
     gssw_graph_mapping** gms = gssw_graph_trace_back_internal(graph,
                                                               pinned_node,
@@ -3601,7 +3729,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
                                                               nt_table,
                                                               score_matrix,
                                                               gap_open,
-                                                              gap_extension);
+                                                              gap_extension,
+                                                              pinned_full_length_bonus);
     gssw_graph_mapping* gm = gms[0];
     free(gms);
     return(gm);
@@ -3615,7 +3744,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
                                                            int8_t* nt_table,
                                                            int8_t* adj_score_matrix,
                                                            uint8_t gap_open,
-                                                           uint8_t gap_extension) {
+                                                           uint8_t gap_extension,
+                                                           int8_t pinned_full_length_bonus) {
     
     gssw_graph_mapping** gms = gssw_graph_trace_back_internal(graph,
                                                               pinned_node,
@@ -3626,7 +3756,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
                                                               nt_table,
                                                               adj_score_matrix,
                                                               gap_open,
-                                                              gap_extension);
+                                                              gap_extension,
+                                                              pinned_full_length_bonus);
     gssw_graph_mapping* gm = gms[0];
     free(gms);
     return(gm);
@@ -3640,7 +3771,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
                                                          int8_t* nt_table,
                                                          int8_t* score_matrix,
                                                          uint8_t gap_open,
-                                                         uint8_t gap_extension) {
+                                                         uint8_t gap_extension,
+                                                         int8_t pinned_full_length_bonus) {
     
     return gssw_graph_trace_back_internal(graph,
                                           pinned_node,
@@ -3651,7 +3783,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
                                           nt_table,
                                           score_matrix,
                                           gap_open,
-                                          gap_extension);
+                                          gap_extension,
+                                          pinned_full_length_bonus);
 }
 
 gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* graph,
@@ -3663,7 +3796,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* gr
                                                                   int8_t* nt_table,
                                                                   int8_t* adj_score_matrix,
                                                                   uint8_t gap_open,
-                                                                  uint8_t gap_extension) {
+                                                                  uint8_t gap_extension,
+                                                                  int8_t pinned_full_length_bonus) {
     return gssw_graph_trace_back_internal(graph,
                                           pinned_node,
                                           num_tracebacks,
@@ -3673,7 +3807,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* gr
                                           nt_table,
                                           adj_score_matrix,
                                           gap_open,
-                                          gap_extension);
+                                          gap_extension,
+                                          pinned_full_length_bonus);
 }
 
 void gssw_cigar_push_back(gssw_cigar* c, char type, uint32_t length) {
@@ -3968,6 +4103,7 @@ gssw_graph_fill_internal (gssw_graph* graph,
                           const int8_t* score_matrix,
                           const uint8_t weight_gapO,
                           const uint8_t weight_gapE,
+                          const int8_t pinned_full_length_bonus,
                           const int32_t maskLen,
                           const int8_t score_size) {
     int32_t read_length = strlen(read_seq);
@@ -3975,10 +4111,10 @@ gssw_graph_fill_internal (gssw_graph* graph,
     int8_t* qual_num = gssw_create_qual_num(read_qual, read_length);
     gssw_profile* prof;
     if (read_qual) {
-        prof = gssw_qual_adj_init (read_num, qual_num, read_length, score_matrix, 5, score_size);
+        prof = gssw_qual_adj_init (read_num, qual_num, read_length, score_matrix, 5, pinned_full_length_bonus, score_size);
     }
     else {
-        prof = gssw_init(read_num, read_length, score_matrix, 5, score_size);
+        prof = gssw_init(read_num, read_length, score_matrix, 5, pinned_full_length_bonus, score_size);
     }
     gssw_seed* seed = NULL;
     uint16_t max_score = 0;
@@ -4005,11 +4141,12 @@ gssw_graph_fill_internal (gssw_graph* graph,
             free(qual_num);
             gssw_profile_destroy(prof);
             if (read_qual) {
-                return gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, score_matrix, weight_gapO,
-                                                weight_gapE, maskLen, 1);
+                return gssw_graph_fill_pinned_qual_adj(graph, read_seq, read_qual, nt_table, score_matrix, weight_gapO,
+                                                       weight_gapE, pinned_full_length_bonus, maskLen, 1);
             }
             else {
-                return gssw_graph_fill(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE, maskLen, 1);
+                return gssw_graph_fill_pinned(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE,
+                                              pinned_full_length_bonus, maskLen, 1);
             }
         } else {
             if (!graph->max_node || n->alignment->score1 > max_score) {
@@ -4040,7 +4177,7 @@ gssw_graph_fill (gssw_graph* graph,
                  const int8_t score_size) {
     
     return gssw_graph_fill_internal(graph, read_seq, NULL, nt_table, score_matrix,
-                                    weight_gapO, weight_gapE, maskLen, score_size);
+                                    weight_gapO, weight_gapE, 0, maskLen, score_size);
 }
 
 
@@ -4057,9 +4194,42 @@ gssw_graph_fill_qual_adj(gssw_graph* graph,
                          const int8_t score_size) {
 
     return gssw_graph_fill_internal(graph, read_seq, read_qual, nt_table, adj_score_matrix,
-                                    weight_gapO, weight_gapE, maskLen, score_size);
+                                    weight_gapO, weight_gapE, 0, maskLen, score_size);
 }
 
+
+gssw_graph*
+gssw_graph_fill_pinned (gssw_graph* graph,
+                        const char* read_seq,
+                        const int8_t* nt_table,
+                        const int8_t* score_matrix,
+                        const uint8_t weight_gapO,
+                        const uint8_t weight_gapE,
+                        const int8_t pinned_full_length_bonus,
+                        const int32_t maskLen,
+                        const int8_t score_size) {
+    
+    return gssw_graph_fill_internal(graph, read_seq, NULL, nt_table, score_matrix,
+                                    weight_gapO, weight_gapE, pinned_full_length_bonus, maskLen,
+                                    score_size);
+}
+
+gssw_graph*
+gssw_graph_fill_pinned_qual_adj(gssw_graph* graph,
+                                const char* read_seq,
+                                const char* read_qual,
+                                const int8_t* nt_table,
+                                const int8_t* adj_score_matrix,
+                                const uint8_t weight_gapO,
+                                const uint8_t weight_gapE,
+                                const int8_t pinned_full_length_bonus,
+                                const int32_t maskLen,
+                                const int8_t score_size) {
+    
+    return gssw_graph_fill_internal(graph, read_seq, read_qual, nt_table, adj_score_matrix,
+                                    weight_gapO, weight_gapE, pinned_full_length_bonus, maskLen,
+                                    score_size);
+}
 
 
 gssw_node*
