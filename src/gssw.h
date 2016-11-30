@@ -241,6 +241,7 @@ extern "C" {
 	@param	readLen	length of the query sequence
 	@param	mat	pointer to the substitution matrix; mat needs to be corresponding to the read sequence
 	@param	n	the square root of the number of elements in mat (mat has n*n elements)
+	@param	pinned_full_length_bonus	a bonus for aligning the full length of a pinned alignment, should be set to 0 for unpinned
 	@param	score_size	estimated Smith-Waterman score; if your estimated best alignment score is surely < 255 please set 0; if
 						your estimated best alignment score >= 255, please set 1; if you don't know, please set 2
 	@return	pointer to the query profile structure
@@ -254,7 +255,8 @@ extern "C" {
 			 -2 -2 -2  2 //T
 			mat is the pointer to the array {2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2, -2, -2, -2, -2, 2}
 */
-gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n, const int8_t score_size);
+gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t* mat, const int32_t n,
+                         int8_t pinned_full_length_bonus, const int8_t score_size);
 
 /*!	@function	Create the quality-score adjusted query profile using the query sequence and its quality scores.
 	@param	read        pointer to the query sequence; the query sequence needs to be numbers
@@ -262,6 +264,7 @@ gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t
 	@param	adj_mat     pointer to the adjusted substitution matrix; mat needs to be corresponding to the read sequence
                             - see gssw_adjusted_qual_matrix and gssw_scaled_adjusted_qual_matrix
 	@param	n           the square root of the number of elements in mat (mat has n*n elements)
+	@param	pinned_full_length_bonus	a bonus for aligning the full length of a pinned alignment, should be set to 0 for unpinned
 	@param	score_size  estimated Smith-Waterman score; if your estimated best alignment score is surely < 255 please set 0; if
                         your estimated best alignment score >= 255, please set 1; if you don't know, please set 2
 	@return	pointer to the query profile structure
@@ -278,7 +281,7 @@ gssw_profile* gssw_init (const int8_t* read, const int32_t readLen, const int8_t
             of value as possible anyway to increase sensitivity
 */
 gssw_profile* gssw_qual_adj_init (const int8_t* read, const int8_t* qual, const int32_t readLen, const int8_t* adj_mat,
-                                  const int32_t n, const int8_t score_size);
+                                  const int32_t n, int8_t pinned_full_length_bonus, const int8_t score_size);
 
 /*!	@function	Release the memory allocated by function ssw_init.
 	@param	p	pointer to the query profile structure
@@ -491,7 +494,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
                                                   int8_t* nt_table,
                                                   int8_t* score_matrix,
                                                   uint8_t gap_open,
-                                                  uint8_t gap_extension);
+                                                  uint8_t gap_extension,
+                                                  int8_t pinned_full_length_bonus);
     
 gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
                                                            gssw_node* pinned_node,
@@ -501,7 +505,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
                                                            int8_t* nt_table,
                                                            int8_t* adj_score_matrix,
                                                            uint8_t gap_open,
-                                                           uint8_t gap_extension);
+                                                           uint8_t gap_extension,
+                                                           int8_t pinned_full_length_bonus);
 
 // Computes an arbitrary number of highest scoring tracebacks ending with the final character of the
 // read aligned to the final character of a given node
@@ -513,7 +518,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
                                                          int8_t* nt_table,
                                                          int8_t* score_matrix,
                                                          uint8_t gap_open,
-                                                         uint8_t gap_extension);
+                                                         uint8_t gap_extension,
+                                                         int8_t pinned_full_length_bonus);
 
 gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* graph,
                                                                   gssw_node* pinned_node,
@@ -524,7 +530,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* gr
                                                                   int8_t* nt_table,
                                                                   int8_t* adj_score_matrix,
                                                                   uint8_t gap_open,
-                                                                  uint8_t gap_extension);
+                                                                  uint8_t gap_extension,
+                                                                  int8_t pinned_full_length_bonus);
 
 
     
@@ -595,6 +602,29 @@ gssw_graph_fill_qual_adj(gssw_graph* graph,
                          const uint8_t weight_gapE,
                          const int32_t maskLen,
                          const int8_t score_size);
+    
+gssw_graph*
+gssw_graph_fill_pinned (gssw_graph* graph,
+                        const char* read_seq,
+                        const int8_t* nt_table,
+                        const int8_t* score_matrix,
+                        const uint8_t weight_gapO,
+                        const uint8_t weight_gapE,
+                        const int8_t pinned_full_length_bonus,
+                        const int32_t maskLen,
+                        const int8_t score_size);
+
+gssw_graph*
+gssw_graph_fill_pinned_qual_adj(gssw_graph* graph,
+                                const char* read_seq,
+                                const char* read_qual,
+                                const int8_t* nt_table,
+                                const int8_t* adj_score_matrix,
+                                const uint8_t weight_gapO,
+                                const uint8_t weight_gapE,
+                                const int8_t pinned_full_length_bonus,
+                                const int32_t maskLen,
+                                const int8_t score_size);
     
 gssw_graph* gssw_graph_create(uint32_t size);
 int32_t gssw_graph_add_node(gssw_graph* graph,
