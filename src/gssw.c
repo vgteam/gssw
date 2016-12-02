@@ -3103,7 +3103,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                             break;
                         }
                         else if (score == pinned_full_length_bonus - gap_open && gapInRef) {
-                            gssw_cigar_push_front(nc->cigar, 'D', 1);
+                            gssw_cigar_push_front(nc->cigar, 'I', 1);
                             readEnd--;
                             break;
                         }
@@ -3432,7 +3432,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                             readEnd--;
                             break;
                         }
-                        else if (score == pinned_full_length_bonus - gap_open) {
+                        else if (score == pinned_full_length_bonus - gap_open && gapInRef) {
                             gssw_cigar_push_front(nc->cigar, 'I', 1);
                             readEnd--;
                             break;
