@@ -425,7 +425,8 @@ gssw_cigar* gssw_alignment_trace_back (gssw_node* node,
                                        int8_t* nt_table,
                                        int8_t* score_matrix,
                                        uint8_t gap_open,
-                                       uint8_t gap_extension);
+                                       uint8_t gap_extension,
+                                       int8_t pinned_full_length_bonus);
     
 gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                                             gssw_multi_align_stack* alt_alignment_stack,
@@ -445,7 +446,8 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                                             int8_t* nt_table,
                                             int8_t* score_matrix,
                                             uint8_t gap_open,
-                                            uint8_t gap_extension);
+                                            uint8_t gap_extension,
+                                            int8_t pinned_full_length_bonus);
 
 gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                                             gssw_multi_align_stack* alt_alignment_stack,
@@ -465,7 +467,8 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                                             int8_t* nt_table,
                                             int8_t* score_matrix,
                                             uint8_t gap_open,
-                                            uint8_t gap_extension);
+                                            uint8_t gap_extension,
+                                            int8_t pinned_full_length_bonus);
 
 // Compute and return the traceback from a graph for which the alignment DP has been performed.
 gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
