@@ -3844,6 +3844,10 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* gr
 }
 
 void gssw_cigar_push_back(gssw_cigar* c, char type, uint32_t length) {
+    if (length == 0) {
+        return;
+    }
+    
     if (c->length == 0) {
         c->length = 1;
         c->elements = (gssw_cigar_element*) malloc(c->length * sizeof(gssw_cigar_element));
@@ -3861,6 +3865,7 @@ void gssw_cigar_push_back(gssw_cigar* c, char type, uint32_t length) {
     }
 }
 
+// TODO: this could be made faster / less hacky
 void gssw_cigar_push_front(gssw_cigar* c, char type, uint32_t length) {
     gssw_reverse_cigar(c);
     gssw_cigar_push_back(c, type, length);
