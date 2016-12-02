@@ -1137,7 +1137,8 @@ gssw_cigar* gssw_alignment_trace_back (gssw_node* node,
                                        int8_t* nt_table,
                                        int8_t* score_matrix,
                                        uint8_t gap_open,
-                                       uint8_t gap_extension) {
+                                       uint8_t gap_extension,
+                                       int8_t pinned_full_length_bonus) {
     if (LIKELY(gssw_is_byte(node->alignment))) {
         return gssw_alignment_trace_back_byte(node,
                                               alt_alignment_stack,
@@ -1157,7 +1158,8 @@ gssw_cigar* gssw_alignment_trace_back (gssw_node* node,
                                               nt_table,
                                               score_matrix,
                                               gap_open,
-                                              gap_extension);
+                                              gap_extension,
+                                              pinned_full_length_bonus);
     } else {
         return gssw_alignment_trace_back_word(node,
                                               alt_alignment_stack,
@@ -1177,7 +1179,8 @@ gssw_cigar* gssw_alignment_trace_back (gssw_node* node,
                                               nt_table,
                                               score_matrix,
                                               gap_open,
-                                              gap_extension);
+                                              gap_extension,
+                                              pinned_full_length_bonus);
     }
 }
 
@@ -1199,7 +1202,8 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                                             int8_t* nt_table,
                                             int8_t* score_matrix,
                                             uint8_t gap_open,
-                                            uint8_t gap_extension) {
+                                            uint8_t gap_extension,
+                                            int8_t pinned_full_length_bonus) {
 
     gssw_align* alignment = node->alignment;
     
@@ -1618,7 +1622,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                     }
                 }
             }
-            else if(j == 0) {
+            else if (j == 0) {
                 // We have hit the end of the read in a gap, which should be
                 // impossible because there's nowhere to open from.
                 fprintf(stderr, "error:[gssw] Ref gap hit edge!\n");
@@ -1658,6 +1662,11 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
             }
             else {
                 align_score = score_matrix[nt_table[(uint8_t) ref[i]] * 5 + nt_table[(uint8_t) read[j]]];
+            }
+            
+            // Full length pinned alignment bonus if we're matching the first position
+            if (j == 0) {
+                align_score += pinned_full_length_bonus;
             }
             
             if (i > 0 && j > 0) {
@@ -1744,6 +1753,14 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                         
 #ifdef DEBUG_TRACEBACK
                         fprintf(stderr, "Alignment start match, ref = %c, read = %c\n", ref[i], read[j]);
+#endif
+                    }
+                    else {
+                        // This is a mismatch (possible with pinning bonus)
+                        gssw_cigar_push_back(result, 'X', 1);
+                        
+#ifdef DEBUG_TRACEBACK
+                        fprintf(stderr, "Alignment start mismatch, ref = %c, read = %c\n", ref[i], read[j]);
 #endif
                     }
                     next_j--;
@@ -1911,7 +1928,8 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                                             int8_t* nt_table,
                                             int8_t* score_matrix,
                                             uint8_t gap_open,
-                                            uint8_t gap_extension) {
+                                            uint8_t gap_extension,
+                                            int8_t pinned_full_length_bonus) {
 
     gssw_align* alignment = node->alignment;
     
@@ -2372,6 +2390,11 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                 align_score = score_matrix[nt_table[(uint8_t) ref[i]] * 5 + nt_table[(uint8_t) read[j]]];
             }
             
+            // Full length pinned alignment bonus if we're matching the first position
+            if (j == 0) {
+                align_score += pinned_full_length_bonus;
+            }
+            
             if (i > 0 && j > 0) {
                 
                 source_score = mH[readLen*(i-1) + (j-1)];
@@ -2456,6 +2479,14 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                         
 #ifdef DEBUG_TRACEBACK
                         fprintf(stderr, "Alignment start match, ref = %c, read = %c\n", ref[i], read[j]);
+#endif
+                    }
+                    else {
+                        // This is a mismatch (possible with pinning bonus)
+                        gssw_cigar_push_back(result, 'X', 1);
+                        
+#ifdef DEBUG_TRACEBACK
+                        fprintf(stderr, "Alignment start mismatch, ref = %c, read = %c\n", ref[i], read[j]);
 #endif
                     }
                     next_j--;
@@ -2883,7 +2914,8 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                                                    nt_table,
                                                    score_matrix,
                                                    gap_open,
-                                                   gap_extension);
+                                                   gap_extension,
+                                                   pinned_full_length_bonus);
             
             //assert(0);
             
@@ -3070,7 +3102,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                             readEnd--;
                             break;
                         }
-                        else if (score == pinned_full_length_bonus - gap_open) {
+                        else if (score == pinned_full_length_bonus - gap_open && gapInRef) {
                             gssw_cigar_push_front(nc->cigar, 'D', 1);
                             readEnd--;
                             break;
@@ -3401,7 +3433,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                             break;
                         }
                         else if (score == pinned_full_length_bonus - gap_open) {
-                            gssw_cigar_push_front(nc->cigar, 'D', 1);
+                            gssw_cigar_push_front(nc->cigar, 'I', 1);
                             readEnd--;
                             break;
                         }
