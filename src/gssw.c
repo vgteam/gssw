@@ -4155,11 +4155,24 @@ gssw_graph_fill_internal (gssw_graph* graph,
     }
     gssw_seed* seed = NULL;
     uint16_t max_score = 0;
-    
-    // for each node, from start to finish in the partial order (which should be sorted topologically)
-    // generate a seed from input nodes or use existing (e.g. for subgraph traversal here)
     uint32_t i;
     gssw_node** npp = &graph->nodes[0];
+    // seed the head nodes of the graph
+    for (i = 0; i < graph->size; ++i, ++npp) {
+        gssw_node* n = *npp;
+        // head node condition
+        if (!n->count_prev) {
+            if (prof->profile_byte) {
+                seed = gssw_create_seed_byte(prof->readLen, n->prev, n->count_prev);
+            } else {
+                seed = gssw_create_seed_word(prof->readLen, n->prev, n->count_prev);
+            }
+            gssw_seed_destroy(seed); seed = NULL; // cleanup seed
+        }
+    }
+    npp = &graph->nodes[0];
+    // for each node, from start to finish in the partial order (which should be sorted topologically)
+    // generate a seed from input nodes or use existing (e.g. for subgraph traversal here)
     for (i = 0; i < graph->size; ++i, ++npp) {
         gssw_node* n = *npp;
         // get seed from parents (max of multiple inputs)
