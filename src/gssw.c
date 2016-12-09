@@ -4075,7 +4075,6 @@ gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t coun
             exit(1);
         }
     }
-
     __m128i vZero = _mm_set1_epi32(0);
 	int32_t segLen = (readLen + 15) / 16;
     gssw_seed* seed = (gssw_seed*)calloc(1, sizeof(gssw_seed));
@@ -4104,6 +4103,13 @@ gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t coun
 
 gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t count) {
     int32_t j = 0, k = 0;
+    for (k = 0; k < count; ++k) {
+        if (!prev[k]->alignment) {
+            fprintf(stderr, "error:[gssw] cannot align because node predecessors cannot provide seed\n");
+            fprintf(stderr, "failing is node %u\n", prev[k]->id);
+            exit(1);
+        }
+    }
     __m128i vZero = _mm_set1_epi32(0);
 	int32_t segLen = (readLen + 7) / 8;
     gssw_seed* seed = (gssw_seed*)calloc(1, sizeof(gssw_seed));
