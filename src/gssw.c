@@ -4130,49 +4130,6 @@ gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t coun
     return seed;
 }
 
-bool
-gssw_fill_node_internal (gssw_node* n,
-                         gssw_seed* seed,
-                         gssw_profile* prof,
-                         int8_t* read_num,
-                         int8_t* qual_num,
-                         uint16_t* max_score,                         
-                         gssw_graph* graph,
-                         const char* read_seq,
-                         const char* read_qual,
-                         const int8_t* nt_table,
-                         const int8_t* score_matrix,
-                         const uint8_t weight_gapO,
-                         const uint8_t weight_gapE,
-                         const int8_t pinned_full_length_bonus,
-                         const int32_t maskLen,
-                         const int8_t score_size) {
-
-    // get seed from parents (max of multiple inputs)
-    if (prof->profile_byte) {
-        seed = gssw_create_seed_byte(prof->readLen, n->prev, n->count_prev);
-    } else {
-        seed = gssw_create_seed_word(prof->readLen, n->prev, n->count_prev);
-    }
-    gssw_node* filled_node = gssw_node_fill(n, prof, weight_gapO, weight_gapE, maskLen, seed);
-    gssw_seed_destroy(seed); seed = NULL; // cleanup seed
-    // test if we have exceeded the score dynamic range
-    if (prof->profile_byte && !filled_node) {
-        free(prof->profile_byte);
-        prof->profile_byte = NULL;
-        free(read_num);
-        free(qual_num);
-        gssw_profile_destroy(prof);
-        return false;
-    } else {
-        if (!graph->max_node || n->alignment->score1 > *max_score) {
-            graph->max_node = n;
-            *max_score = n->alignment->score1;
-        }
-        return true;
-    }
-}
-
 gssw_graph*
 gssw_graph_fill_internal (gssw_graph* graph,
                           const char* read_seq,
@@ -4200,13 +4157,23 @@ gssw_graph_fill_internal (gssw_graph* graph,
     gssw_node** npp = &graph->nodes[0];
     // seed the head nodes of the graph
     for (i = 0; i < graph->size; ++i, ++npp) {
-        // head node condition
         gssw_node* n = *npp;
+        // head node condition
         if (!n->count_prev) {
-            bool score_exceeded = gssw_fill_node_internal(*npp, seed, prof, read_num, qual_num, &max_score,
-                                                          graph, read_seq, read_qual, nt_table, score_matrix, weight_gapO, weight_gapE,
-                                                          pinned_full_length_bonus, maskLen, 1);
-            if (score_exceeded) {
+            if (prof->profile_byte) {
+                seed = gssw_create_seed_byte(prof->readLen, n->prev, n->count_prev);
+            } else {
+                seed = gssw_create_seed_word(prof->readLen, n->prev, n->count_prev);
+            }
+            gssw_node* filled_node = gssw_node_fill(n, prof, weight_gapO, weight_gapE, maskLen, seed);
+            gssw_seed_destroy(seed); seed = NULL; // cleanup seed
+            // test if we have exceeded the score dynamic range
+            if (prof->profile_byte && !filled_node) {
+                free(prof->profile_byte);
+                prof->profile_byte = NULL;
+                free(read_num);
+                free(qual_num);
+                gssw_profile_destroy(prof);
                 if (read_qual) {
                     return gssw_graph_fill_pinned_qual_adj(graph, read_seq, read_qual, nt_table, score_matrix, weight_gapO,
                                                            weight_gapE, pinned_full_length_bonus, maskLen, 1);
@@ -4214,6 +4181,11 @@ gssw_graph_fill_internal (gssw_graph* graph,
                 else {
                     return gssw_graph_fill_pinned(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE,
                                                   pinned_full_length_bonus, maskLen, 1);
+                }
+            } else {
+                if (!graph->max_node || n->alignment->score1 > max_score) {
+                    graph->max_node = n;
+                    max_score = n->alignment->score1;
                 }
             }
         }
@@ -4223,12 +4195,22 @@ gssw_graph_fill_internal (gssw_graph* graph,
     // generate a seed from input nodes or use existing (e.g. for subgraph traversal here)
     for (i = 0; i < graph->size; ++i, ++npp) {
         gssw_node* n = *npp;
-        // not head node
+        // get seed from parents (max of multiple inputs)
         if (n->count_prev) {
-            bool score_exceeded = gssw_fill_node_internal(*npp, seed, prof, read_num, qual_num, &max_score,
-                                                          graph, read_seq, read_qual, nt_table, score_matrix, weight_gapO, weight_gapE,
-                                                          pinned_full_length_bonus, maskLen, 1);
-            if (score_exceeded) {
+            if (prof->profile_byte) {
+                seed = gssw_create_seed_byte(prof->readLen, n->prev, n->count_prev);
+            } else {
+                seed = gssw_create_seed_word(prof->readLen, n->prev, n->count_prev);
+            }
+            gssw_node* filled_node = gssw_node_fill(n, prof, weight_gapO, weight_gapE, maskLen, seed);
+            gssw_seed_destroy(seed); seed = NULL; // cleanup seed
+            // test if we have exceeded the score dynamic range
+            if (prof->profile_byte && !filled_node) {
+                free(prof->profile_byte);
+                prof->profile_byte = NULL;
+                free(read_num);
+                free(qual_num);
+                gssw_profile_destroy(prof);
                 if (read_qual) {
                     return gssw_graph_fill_pinned_qual_adj(graph, read_seq, read_qual, nt_table, score_matrix, weight_gapO,
                                                            weight_gapE, pinned_full_length_bonus, maskLen, 1);
@@ -4237,16 +4219,21 @@ gssw_graph_fill_internal (gssw_graph* graph,
                     return gssw_graph_fill_pinned(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE,
                                                   pinned_full_length_bonus, maskLen, 1);
                 }
+            } else {
+                if (!graph->max_node || n->alignment->score1 > max_score) {
+                    graph->max_node = n;
+                    max_score = n->alignment->score1;
+                }
             }
         }
     }
-    
+
     free(read_num);
     free(qual_num);
     gssw_profile_destroy(prof);
-    
+
     return graph;
-    
+
 }
 
 // TODO graph traceback
