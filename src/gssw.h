@@ -483,7 +483,9 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                            int8_t* nt_table,
                                            int8_t* score_matrix,
                                            uint8_t gap_open,
-                                           uint8_t gap_extension);
+                                           uint8_t gap_extension,
+                                           int8_t start_full_length_bonus,
+                                           int8_t end_full_length_bonus);
     
 gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
                                                     const char* read,
@@ -492,7 +494,9 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
                                                     int8_t* nt_table,
                                                     int8_t* adj_score_matrix,
                                                     uint8_t gap_open,
-                                                    uint8_t gap_extension);
+                                                    uint8_t gap_extension,
+                                                    int8_t start_full_length_bonus,
+                                                    int8_t end_full_length_bonus);
 
 // Computes the traceback ending with the final character of the read aligned to the final character
 // of a given node

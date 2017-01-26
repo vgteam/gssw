@@ -88,7 +88,8 @@ int main (int argc, char * const argv[]) {
                                                              nt_table,
                                                              adj_mat,
                                                              gap_open,
-                                                             gap_extension);
+                                                             gap_extension,
+                                                             0, 0);
     
     printf("Optimal local mapping:\n");
     gssw_print_graph_mapping(gm, stdout);
