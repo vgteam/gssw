@@ -103,7 +103,7 @@ int main (int argc, char * const argv[]) {
                                                                      adj_mat,
                                                                      gap_open,
                                                                      gap_extension,
-                                                                     0);
+                                                                     0, 0);
     
     printf("Optimal pinned mapping:\n");
     gssw_print_graph_mapping(gmp, stdout);
@@ -120,7 +120,7 @@ int main (int argc, char * const argv[]) {
                                                                              adj_mat,
                                                                              gap_open,
                                                                              gap_extension,
-                                                                             0);
+                                                                             0, 0);
     
     printf("Best %d pinned mappings:\n", num_alts);
     int j;
