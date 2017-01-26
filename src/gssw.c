@@ -101,8 +101,9 @@ __m128i* gssw_qP_byte (const int8_t* read_num,
             t++;
             j += segLen;
             // use normal score for the rest of the vector
+            // except for the last base which also gets a bonus
             for (segNum = 1; LIKELY(segNum < 16) ; segNum ++) {
-                *t = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias;
+                *t = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias + (j == readLen - 1 ? end_full_length_bonus : 0);
                 t++;
                 j += segLen;
             }
@@ -111,7 +112,7 @@ __m128i* gssw_qP_byte (const int8_t* read_num,
 		for (i = 1; i < segLen; i ++) {
 			j = i;
 			for (segNum = 0; LIKELY(segNum < 16) ; segNum ++) {
-			    // TODO: when we're doing the last base (j = readlen - 1), add the full length right alignment bonus
+			    // Now handle all the vectors after the first
                 *t = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias + (j == readLen - 1 ? end_full_length_bonus : 0);
                 t++;
 				j += segLen;
@@ -153,7 +154,8 @@ __m128i* gssw_adj_qP_byte (const int8_t* read_num,
             j += segLen;
             // use normal score for the rest of the vector
             for (segNum = 1; LIKELY(segNum < 16) ; segNum ++) {
-                *t = j>= readLen ? bias : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + bias;
+                *t = j>= readLen ? bias : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + bias +
+                    (j == readLen - 1 ? end_full_length_bonus : 0);
                 t++;
                 j += segLen;
             }
@@ -541,7 +543,7 @@ __m128i* gssw_qP_word (const int8_t* read_num,
             j += segLen;
             // use normal score for the rest of the vector
             for (segNum = 1; LIKELY(segNum < 8) ; segNum ++) {
-                *t = j>= readLen ? 0 : mat[nt * n + read_num[j]];
+                *t = j>= readLen ? 0 : mat[nt * n + read_num[j]] + (j == readLen - 1 ? end_full_length_bonus : 0);
                 t++;
                 j += segLen;
             }
@@ -586,7 +588,8 @@ __m128i* gssw_adj_qP_word (const int8_t* read_num,
             j += segLen;
             // use normal score for the rest of the vector
             for (segNum = 1; LIKELY(segNum < 8) ; segNum ++) {
-                *t = j>= readLen ? 0 : adj_mat[qual[j] * matSize + nt * n + read_num[j]];
+                *t = j>= readLen ? 0 : adj_mat[qual[j] * matSize + nt * n + read_num[j]] +
+                    (j == readLen - 1 ? end_full_length_bonus : 0);
                 t++;
                 j += segLen;
             }
