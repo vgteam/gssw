@@ -606,6 +606,8 @@ gssw_graph_fill (gssw_graph* graph,
                  const int8_t* score_matrix,
                  const uint8_t weight_gapO,
                  const uint8_t weight_gapE,
+                 const int8_t start_full_length_bonus,
+                 const int8_t end_full_length_bonus,
                  const int32_t maskLen,
                  const int8_t score_size);
 
@@ -617,6 +619,8 @@ gssw_graph_fill_qual_adj(gssw_graph* graph,
                          const int8_t* adj_score_matrix,
                          const uint8_t weight_gapO,
                          const uint8_t weight_gapE,
+                         const int8_t start_full_length_bonus,
+                         const int8_t end_full_length_bonus,
                          const int32_t maskLen,
                          const int8_t score_size);
     

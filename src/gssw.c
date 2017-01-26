@@ -4299,11 +4299,14 @@ gssw_graph_fill (gssw_graph* graph,
                  const int8_t* score_matrix,
                  const uint8_t weight_gapO,
                  const uint8_t weight_gapE,
+                 const int8_t start_full_length_bonus,
+                 const int8_t end_full_length_bonus,
                  const int32_t maskLen,
                  const int8_t score_size) {
     
     return gssw_graph_fill_internal(graph, read_seq, NULL, nt_table, score_matrix,
-                                    weight_gapO, weight_gapE, 0, 0, maskLen, score_size);
+                                    weight_gapO, weight_gapE, start_full_length_bonus,
+                                    end_full_length_bonus, maskLen, score_size);
 }
 
 
@@ -4316,11 +4319,14 @@ gssw_graph_fill_qual_adj(gssw_graph* graph,
                          const int8_t* adj_score_matrix,
                          const uint8_t weight_gapO,
                          const uint8_t weight_gapE,
+                         const int8_t start_full_length_bonus,
+                         const int8_t end_full_length_bonus,
                          const int32_t maskLen,
                          const int8_t score_size) {
 
     return gssw_graph_fill_internal(graph, read_seq, read_qual, nt_table, adj_score_matrix,
-                                    weight_gapO, weight_gapE, 0, 0, maskLen, score_size);
+                                    weight_gapO, weight_gapE, start_full_length_bonus,
+                                    end_full_length_bonus, maskLen, score_size);
 }
 
 
@@ -4335,6 +4341,9 @@ gssw_graph_fill_pinned (gssw_graph* graph,
                         const int8_t end_full_length_bonus,
                         const int32_t maskLen,
                         const int8_t score_size) {
+                        
+    // TODO: now that we have full length bonuses for unpinned alignment, this
+    // doesn't do anything different than the unpinned version...
     
     return gssw_graph_fill_internal(graph, read_seq, NULL, nt_table, score_matrix,
                                     weight_gapO, weight_gapE, start_full_length_bonus,
