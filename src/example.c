@@ -58,7 +58,7 @@ int main (int argc, char * const argv[]) {
     gssw_graph_add_node(graph, nodes[2]);
     gssw_graph_add_node(graph, nodes[3]);
     
-    gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 15, 2);
+    gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 0, 0, 15, 2);
     gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
     gssw_graph_mapping* gm = gssw_graph_trace_back (graph,
                                                     read_seq,
@@ -66,12 +66,13 @@ int main (int argc, char * const argv[]) {
                                                     nt_table,
                                                     mat,
                                                     gap_open,
-                                                    gap_extension);
+                                                    gap_extension,
+                                                    0, 0);
 
     printf("Optimal local mapping:\n");
     gssw_print_graph_mapping(gm, stdout);
     gssw_graph_mapping_destroy(gm);
-
+    
     
     gssw_graph_mapping* gmp = gssw_graph_trace_back_pinned (graph,
                                                             nodes[3],
@@ -81,7 +82,7 @@ int main (int argc, char * const argv[]) {
                                                             mat,
                                                             gap_open,
                                                             gap_extension,
-                                                            0);
+                                                            0, 0);
     
     printf("Optimal pinned mapping:\n");
     gssw_print_graph_mapping(gmp, stdout);
@@ -97,7 +98,7 @@ int main (int argc, char * const argv[]) {
                                                                     mat,
                                                                     gap_open,
                                                                     gap_extension,
-                                                                    0);
+                                                                    0, 0);
     
     printf("Best %d pinned mappings:\n", num_alts);
     int j;
@@ -108,6 +109,21 @@ int main (int argc, char * const argv[]) {
 
     free(gmps);
     
+    gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 10, 10, 15, 2);
+    gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
+    gm = gssw_graph_trace_back (graph,
+                                read_seq,
+                                strlen(read_seq),
+                                nt_table,
+                                mat,
+                                gap_open,
+                                gap_extension,
+                                10, 10);
+
+    printf("Optimal local mapping with bonus:\n");
+    gssw_print_graph_mapping(gm, stdout);
+    gssw_graph_mapping_destroy(gm);
+
     // note that nodes which are referred to in this graph are destroyed as well
     gssw_graph_destroy(graph);
 

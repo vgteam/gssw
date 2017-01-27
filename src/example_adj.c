@@ -79,7 +79,7 @@ int main (int argc, char * const argv[]) {
     gssw_graph_add_node(graph, nodes[2]);
     gssw_graph_add_node(graph, nodes[3]);
     
-    gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, adj_mat, gap_open, gap_extension, 15, 2);
+    gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, adj_mat, gap_open, gap_extension, 0, 0, 15, 2);
     gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
     gssw_graph_mapping* gm = gssw_graph_trace_back_qual_adj (graph,
                                                              read_seq,
@@ -88,7 +88,8 @@ int main (int argc, char * const argv[]) {
                                                              nt_table,
                                                              adj_mat,
                                                              gap_open,
-                                                             gap_extension);
+                                                             gap_extension,
+                                                             0, 0);
     
     printf("Optimal local mapping:\n");
     gssw_print_graph_mapping(gm, stdout);
@@ -103,7 +104,7 @@ int main (int argc, char * const argv[]) {
                                                                      adj_mat,
                                                                      gap_open,
                                                                      gap_extension,
-                                                                     0);
+                                                                     0, 0);
     
     printf("Optimal pinned mapping:\n");
     gssw_print_graph_mapping(gmp, stdout);
@@ -120,7 +121,7 @@ int main (int argc, char * const argv[]) {
                                                                              adj_mat,
                                                                              gap_open,
                                                                              gap_extension,
-                                                                             0);
+                                                                             0, 0);
     
     printf("Best %d pinned mappings:\n", num_alts);
     int j;
