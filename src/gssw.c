@@ -97,7 +97,9 @@ __m128i* gssw_qP_byte (const int8_t* read_num,
         if (segLen > 0) {
             j = 0;
             // add bonus to first position in first register (corresponds to first position in read)
-            *t = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias + start_full_length_bonus;
+            // also account for the start potentially being the end
+            *t = j>= readLen ? bias : mat[nt * n + read_num[j]] + bias +
+                start_full_length_bonus + (j == readLen - 1 ? end_full_length_bonus : 0);
             t++;
             j += segLen;
             // use normal score for the rest of the vector
@@ -149,7 +151,9 @@ __m128i* gssw_adj_qP_byte (const int8_t* read_num,
         if (segLen > 0) {
             j = 0;
             // add bonus to first position in first register (corresponds to first position in read)
-            *t = j>= readLen ? bias : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + bias + start_full_length_bonus;
+            // also account for the start potentially being the end
+            *t = j>= readLen ? bias : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + bias +
+                start_full_length_bonus + (j == readLen - 1 ? end_full_length_bonus : 0);
             t++;
             j += segLen;
             // use normal score for the rest of the vector
@@ -538,7 +542,9 @@ __m128i* gssw_qP_word (const int8_t* read_num,
         if (segLen > 0) {
             j = 0;
             // add bonus to first position in first register (corresponds to first position in read)
-            *t = j>= readLen ? 0 : mat[nt * n + read_num[j]] + start_full_length_bonus;
+            // also account for the start potentially being the end
+            *t = j>= readLen ? 0 : mat[nt * n + read_num[j]] +
+                start_full_length_bonus + (j == readLen - 1 ? end_full_length_bonus : 0);
             t++;
             j += segLen;
             // use normal score for the rest of the vector
@@ -583,7 +589,9 @@ __m128i* gssw_adj_qP_word (const int8_t* read_num,
         if (segLen > 0) {
             j = 0;
             // add bonus to first position in first register (corresponds to first position in read)
-            *t = j>= readLen ? 0 : adj_mat[qual[j] * matSize + nt * n + read_num[j]] + start_full_length_bonus;
+            // also account for the start potentially being the end
+            *t = j>= readLen ? 0 : adj_mat[qual[j] * matSize + nt * n + read_num[j]] +
+                start_full_length_bonus + (j == readLen - 1 ? end_full_length_bonus : 0);
             t++;
             j += segLen;
             // use normal score for the rest of the vector
@@ -1687,11 +1695,11 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
             }
             
             // Full length left alignment bonus if we're matching the first position
-            // And full length right alignment bonus if we're matching the last position
             if (j == 0) {
                 align_score += start_full_length_bonus;
-            } else if (j == readLen - 1) {
-                // TODO: does this ever matter?
+            }
+            // And full length right alignment bonus if we're matching the last position
+            if (j == readLen - 1) {
                 align_score += end_full_length_bonus;
             }
             
@@ -2418,11 +2426,11 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
             }
             
             // Full length pinned alignment bonus if we're matching the first position
-            // And full length right alignment bonus if we're matching the last position
             if (j == 0) {
                 align_score += start_full_length_bonus;
-            } else if (j == readLen - 1) {
-                // TODO: does this ever matter?
+            }
+            // And full length right alignment bonus if we're matching the last position
+            if (j == readLen - 1) {
                 align_score += end_full_length_bonus;
             }
             
@@ -3118,8 +3126,13 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                         align_score = score_matrix[nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
                     }
                     
+                    // Full length right alignment bonus if we're matching the last position
+                    if (readEnd == readLen - 1) {
+                        align_score += end_full_length_bonus;
+                    }
+                    
                     if (UNLIKELY(readEnd == 0)) {
-                        // The alignment received a bonus to its score for aligning the full length in pinned alignment.
+                        // The alignment received a bonus to its score for aligning the full length.
                         // If so, we can break here even though score is not 0
                         if (score == start_full_length_bonus + align_score) {
                             if (refChar == 'N' || readChar == 'N') {
@@ -3446,6 +3459,11 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                     }
                     else {
                         align_score = score_matrix[nt_table[(uint8_t)refChar] * 5 + nt_table[(uint8_t)readChar]];
+                    }
+                    
+                    // Full length right alignment bonus if we're matching the last position
+                    if (readEnd == readLen - 1) {
+                        align_score += end_full_length_bonus;
                     }
                     
                     if (UNLIKELY(readEnd == 0)) {
