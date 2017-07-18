@@ -1,5 +1,5 @@
 /*
- *  ssw.h
+ *  gssw.h
  *
  *  Created by Mengyao Zhao on 6/22/10.
  *  Copyright 2010 Boston College. All rights reserved.
@@ -40,7 +40,7 @@ typedef struct gssw_profile gssw_profile;
 // very best alignment using read characters through j and reference characters
 // through i, no matter what it ends in (match, mismatch, or gap). We also have
 // E[i, j] which gives the score of the best such alignment ending in a gap in
-// the read, and F[i, j], which give sthe score of the best such alignment
+// the read, and F[i, j], which gives the score of the best such alignment
 // ending in a gap in the reference.
 
 // During alignment, we work on one column (i.e. reference character) of all the
