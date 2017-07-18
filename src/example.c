@@ -1,8 +1,8 @@
 /*	example.c
  *	This is a simple example to show you how to use the SSW C library.
  *	To run this example:
- *	1) gcc -Wall -lz ssw.c example.c
- *	2) ./a.out
+ *	1) make
+ *	2) bin/gssw_example GAT TT T ACA GATTACA
  *	Created by Mengyao Zhao on 07/31/12.
  */
 
