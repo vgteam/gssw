@@ -13,11 +13,18 @@
 // Test tools
 ////////////////////////////////////////////////////////////////////////////////
 
+// Did any tests fail yet?
+int tests_failed = 0;
+
 /**
  * Note that a test is starting. Give the name of the thing being tested.
  * Say something like "MyModule".
  */
 void start_case(char* const name) {
+    if (tests_failed) {
+        // Stop!
+        exit(1);
+    }
     printf("%s...\n", name);
 }
 
@@ -26,6 +33,10 @@ void start_case(char* const name) {
  * Say something like "should do the thing".
  */
 void start_test(char* const property) {
+    if (tests_failed) {
+        // Stop!
+        exit(1);
+    }
     printf("\t%s.\n", property);
 }
 
@@ -34,18 +45,30 @@ void start_test(char* const property) {
  */
 void check_condition(int condition, char* const message) {
     if(condition) {
-        // Test succeeded
-        printf("\t\t[OK] ");
+        // Do nothing on success
     } else {
-        // Test failed
-        printf("\t\t[FAIL] ");
+        // Report failure
+        printf("\t\t[FAIL] %s\n", message);
+        
+        // Don't abort this test yet; continue until the next test.
+        tests_failed = 1;
     }
     
-    printf("%s\n", message);
     
-    if (!condition) {
-        // Abort the tests at the first failure.
-        exit(1);
+}
+
+/**
+ * Make sure the two integers are equal.
+ */
+void check_equal(int a, int b, const char* message) {
+    if (a == b) {
+        // Do nothing on success
+    } else {
+        // Report failure
+        printf("\t\t[FAIL] %s: (%d != %d)\n", message, a, b);
+        
+        // Don't abort this test yet; continue until the next test.
+        tests_failed = 1;
     }
 }
 
@@ -96,6 +119,7 @@ gssw_graph* align_strings(char* const ref, char* const read) {
 int gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t readLen) {
     // Nodes must be the same length
     if (n1->len != n2->len) {
+        printf("Node lengths differ: %d vs. %d\n", n1->len, n2->len);
         return 0;
     }
 
@@ -105,6 +129,7 @@ int gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t readLen
     
     if (gssw_is_byte(a1) != gssw_is_byte(a2)) {
         // Both alignments should be the same score size
+        printf("Matrix types differ: %d vs. %d\n", gssw_is_byte(a1), gssw_is_byte(a2));
         return 0;
     }
     
@@ -186,6 +211,7 @@ int gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t readLen
 int gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_t readLen) {
     if (g1->size != g2->size) {
         // Different graph sizes/shapes
+        printf("Matrix sizes differ: %d vs. %d\n", g1->size, g2->size);
         return 0;
     }
     
@@ -196,6 +222,7 @@ int gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_t read
         
         if (!gssw_node_score_matrices_equal(n1, n2, readLen)) {
             // We had a mismatch between these nodes
+            printf("Matrices on node %d differ\n", i);
             return 0;
         }
     }
@@ -215,9 +242,19 @@ void check_alignments_match(char* const reference, char* const read) {
     gssw_sse2_disable();
     gssw_graph* software_aligned = align_strings(reference, read);
 
-    // Now make sure the matrices match
-    check_condition(gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read)),
-        "score matrices are identical");
+    // Do they match?
+    int match = gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read));
+    
+    if (!match) {
+        // No match, so dump matrices
+        printf("SSE2 Filler:\n");
+        gssw_graph_print_score_matrices(sse2_aligned, read, strlen(read), stdout);
+        printf("Software Filler:\n");
+        gssw_graph_print_score_matrices(sse2_aligned, read, strlen(read), stdout);
+    }
+
+    // Now make sure the matrices match (and fail if they didn't)
+    check_condition(match, "score matrices are identical");
         
     // Clean up graphs
     gssw_graph_destroy(sse2_aligned);
@@ -290,7 +327,7 @@ int main (int argc, char * const argv[]) {
     // Run all the tests
     test_gssw_software_fill();
 
-    // Success!
-    return 0;
+    // Return 0 if they succeeded, and 1 otherwise.
+    return tests_failed;
 }
  

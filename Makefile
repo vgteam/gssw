@@ -27,7 +27,7 @@ $(BIN_DIR)/$(EXETEST):$(OBJ_DIR)/$(OBJ) $(SRC_DIR)/gssw_test.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(SRC_DIR)/gssw_test.c -o $@ $< -lm -lz
 
-$(OBJ_DIR)/$(OBJ):$(SRC_DIR)/gssw.h
+$(OBJ_DIR)/$(OBJ):$(SRC_DIR)/gssw.h $(SRC_DIR)/gssw.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c -o $@ $(SRC_DIR)/gssw.c
 
