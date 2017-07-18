@@ -453,7 +453,8 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
 	        uint8_t refGapExtendScore = 0;
 	        if (j == 0) {
 	            // We can only end in a gap in the reference on the first read character with negative score.
-	            pvFStore[j] = subs_byte(bias, weight_gapO);
+	            // But we saturate that out to 0.
+	            pvFStore[j] = subs_byte(0, weight_gapO);
 	        } else {
 	            // Set the gap-in-ref matrix (F) based on previous slot in current F and in current H
 	            refGapOpenScore = subs_byte(pvHStore[j-1], weight_gapO);
@@ -985,6 +986,323 @@ uint16_t profile_get_word(__m128i* vProfile, int32_t readLen, int32_t read_posit
     return profile_words[observed_base * (segLen * 8) + pos_in_segment * 8 + segment];
 }
 
+/**
+ * Swizzle a vector of words into a "striped" vector, organized first by
+ * position in segment and then by segment of 8. Size must be a multiple of 8.
+ */
+void swizzle_word(int16_t* to_swizzle, int32_t size) {
+    if (size == 0) {
+        // Nothing to do!
+        return;
+    }
+    
+    int16_t* scratch = (int16_t*) malloc(size * sizeof(int16_t));
+    if(scratch == NULL) {
+        fprintf(stderr, "error:[gssw] Could not allocate swizzle buffer.\n");
+        exit(1);
+    }
+    // Copy the data out of the way
+    memcpy(scratch, to_swizzle, size * sizeof(int16_t));
+    
+    // How long is a segment? We have 8.
+    int32_t segLen = (size + 7) / 8;
+    
+    // We'll walk this through the destination array.
+    int32_t cursor = 0;
+    
+    int32_t pos_in_segment;
+    for(pos_in_segment = 0; pos_in_segment < segLen; pos_in_segment++) {
+        // For each position in a segment
+    
+        int32_t segNum;
+        for (segNum = 0; segNum < 8; segNum++) {
+            // For each segment
+    
+            // Grab the byte
+            to_swizzle[cursor] = scratch[segNum * segLen + pos_in_segment];
+            // Write the next byte at the next position
+            cursor++;
+        }
+        
+    }
+}
+
+/**
+ * Unswizzle a swizzled vector of words into a normal start-to-end vector of words.
+ * Size must be a multiple of 8.
+ */
+void unswizzle_word(int16_t* to_unswizzle, int32_t size) {
+    if (size == 0) {
+        // Nothing to do!
+        return;
+    }
+    
+    int16_t* scratch = (int16_t*) malloc(size * sizeof(int16_t));
+    if(scratch == NULL) {
+        fprintf(stderr, "error:[gssw] Could not allocate unswizzle buffer.\n");
+        exit(1);
+    }
+    // Copy the data out of the way
+    memcpy(scratch, to_unswizzle, size * sizeof(int16_t));
+    
+    // How long is a segment? We have 8.
+    int32_t segLen = (size + 7) / 8;
+    
+    int32_t i;
+    for (i = 0; i < size; i++) {
+        // Swizzled vector is arranged first by position in segment, then by segment (of 8)
+        // So go to the right position in the segment, and then to the right segment, and get the value
+        // And save it to the right place in the unswizzled vector.
+        to_unswizzle[i] = scratch[(i % segLen) * 8 + (i / segLen)];
+    }
+}
+
+/**
+ * Saturation arithmetic subtraction. (like the "subs" SSE2 intrinsics)
+ * Compute a - b, returning 0 if it would be negative.
+ * Signed for 16 bit mode.
+ */
+int16_t subs_word(int16_t a, int16_t b) {
+    int32_t diff = (int32_t) a - (int32_t) b;
+    if (diff > 32767) {
+        diff = 32767;
+    }
+    if (diff < -32768) {
+        diff = -32768;
+    }
+    return diff;
+}
+
+/**
+ * Saturation arithmetic addition. (like the "addss" SSE2 intrinsics)
+ * Compute a + b, returning max.
+ * Signed for 16 bit mode.
+ */
+int16_t adds_word(int16_t a, int16_t b) {
+    int32_t sum = (int32_t) a + (int32_t) b;
+    if (sum > 32767) {
+        sum = 32767;
+    }
+    if (sum < -32768) {
+        sum = -32768;
+    }
+    return sum;
+}
+
+/**
+ * We need a max for words.
+ * Signed for 16 bit mode.
+ */
+int16_t max_word(int16_t a, int16_t b) {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+
+/**
+ * Compute a word-sized alignment in pure software, without any swizzling or SSE2.
+ * Used for computing known good alingments, for testing.
+ */
+gssw_alignment_end* gssw_sw_software_word (const int8_t* ref,
+                                           int8_t ref_dir,	// 0: forward ref; 1: reverse ref
+                                           int32_t refLen,
+                                           int32_t readLen,
+                                           const uint8_t weight_gapO, /* will be used as - */
+                                           const uint8_t weight_gapE, /* will be used as - */
+                                           __m128i* vProfile,
+                                           uint16_t terminate,
+                                           int32_t maskLen,
+                                           gssw_align* alignment, /* to save seed and matrix */
+                                           const gssw_seed* seed) {     /* to seed the alignment */
+                                           
+    
+                                       
+    int16_t max = 0;		                     /* the max alignment score */
+	int32_t end_read = readLen - 1;
+	int32_t end_ref = -1; /* 0_based best alignment ending point; Initialized as isn't aligned -1. */
+
+    // We need to make sure out matrices are sized to the nearest 8, so pad the read length.
+    int32_t padded_read_length = ((readLen + 7) / 8) * 8;
+
+    // Allocate DP matrices (all stored unswizzled, even in the swizzled strategy)
+    int16_t* mH; // used to save matrices for external traceback: overall best score
+    int16_t* mE; // Gap in read best score
+    int16_t* mF; // Gap in ref best score
+    // And buffers for matrix columns (unswizzled, but stored swizzled in the seeds)
+    int16_t* pvHStore; // Current column of the main (H) matrix
+    int16_t* pvEStore; // Current column of the gap in read (E) matrix
+    int16_t* pvFStore; // Current column of the gap in reference (F) matrix
+    int16_t* pvHLoad; // Previous column of the main (H) matrix
+    int16_t* pvELoad; // Previous column of the gap in read (E) matrix
+    // No previous column needed for the gap in reference (F) martrix
+    // But we do need a scratch pointer for swapping things
+    int16_t* pv;
+    
+    /* Note use of aligned memory.  Return value of 0 means success for posix_memalign. */
+    if (!(!posix_memalign((void**)&pvHStore, sizeof(__m128i), padded_read_length * sizeof(int16_t)) &&
+          !posix_memalign((void**)&pvEStore, sizeof(__m128i), padded_read_length * sizeof(int16_t)) &&
+          !posix_memalign((void**)&pvFStore, sizeof(__m128i), padded_read_length * sizeof(int16_t)) &&
+          !posix_memalign((void**)&pvHLoad,  sizeof(__m128i), padded_read_length * sizeof(int16_t)) &&
+          !posix_memalign((void**)&pvELoad,  sizeof(__m128i), padded_read_length * sizeof(int16_t)) &&
+          !posix_memalign((void**)&alignment->seed.pvE,      sizeof(__m128i), padded_read_length * sizeof(int16_t)) &&
+          !posix_memalign((void**)&alignment->seed.pvHStore, sizeof(__m128i), padded_read_length * sizeof(int16_t)) &&
+          !posix_memalign((void**)&mH,           sizeof(__m128i), refLen * padded_read_length * sizeof(int16_t)) &&
+          !posix_memalign((void**)&mE,           sizeof(__m128i), refLen * padded_read_length * sizeof(int16_t)) &&
+          !posix_memalign((void**)&mF,           sizeof(__m128i), refLen * padded_read_length * sizeof(int16_t)))) {
+        fprintf(stderr, "error:[gssw] Could not allocate memory required for alignment buffers.\n");
+        exit(1);
+    }
+
+    /* Workaround: zero memory ourselves because we don't have an aligned calloc */
+    memset(pvHStore,                 0, padded_read_length * sizeof(int16_t));
+    memset(pvEStore,                 0, padded_read_length * sizeof(int16_t));
+    memset(pvFStore,                 0, padded_read_length * sizeof(int16_t));
+    memset(pvHLoad,                  0, padded_read_length * sizeof(int16_t));
+    memset(pvELoad,                  0, padded_read_length * sizeof(int16_t));
+    memset(alignment->seed.pvE,      0, padded_read_length * sizeof(int16_t));
+    memset(alignment->seed.pvHStore, 0, padded_read_length * sizeof(int16_t));
+    memset(mH,                       0, refLen * padded_read_length * sizeof(int16_t));
+    memset(mE,                       0, refLen * padded_read_length * sizeof(int16_t));
+    memset(mF,                       0, refLen * padded_read_length * sizeof(int16_t));
+
+    /* if we are running a seeded alignment, copy over the seeds */
+    if (seed) {
+        // Load the "current" bufers with the seed contents
+        memcpy(pvEStore, seed->pvE, padded_read_length * sizeof(int16_t));
+        memcpy(pvHStore, seed->pvHStore, padded_read_length * sizeof(int16_t));
+        
+        // Unswizzle them so we can work on normal arrays.
+        unswizzle_word(pvEStore, padded_read_length);
+        unswizzle_word(pvHStore, padded_read_length);
+    }
+
+    /* Set external matrix pointers */
+    alignment->mH = mH;
+    alignment->mE = mE;
+    alignment->mF = mF;
+
+    /* Record that we have done a word-order alignment */
+    alignment->is_byte = 0;
+    
+    int32_t begin = 0, end = refLen, step = 1;
+
+	/* outer loop to process the reference sequence */
+	if (ref_dir == 1) {
+		begin = refLen - 1;
+		end = -1;
+		step = -1;
+	}
+	int32_t i;
+	for (i = begin; LIKELY(i != end); i += step) {
+	    // For each column i in the DP matrices (running in the appropriate direction)
+	    
+	    // We don't need the previous F column.
+	    // But we do need to push the current H and E columns to the previous ones.
+	    // We use a double buffering settup so we don't need to malloc and free and copy stuff.
+	    // By working with a previous and next column, we don't need to do anything fancy to support the flipable ref_dir.
+	    pv = pvHLoad;
+	    pvHLoad = pvHStore;
+	    pvHStore = pv;
+	    pv = pvELoad;
+	    pvELoad = pvEStore;
+	    pvEStore = pv;
+	    
+	    int32_t j;
+	    for (j = 0; j < readLen; j++) {
+	        // For each row j in the DP matrices (running top to bottom)
+	        
+	        // Set the gap-in-read matrix (E) based on previous E and previous H
+	        int16_t readGapOpenScore = subs_word(pvHLoad[j], weight_gapO);
+	        int16_t readGapExtendScore = subs_word(pvELoad[j], weight_gapE);
+	        pvEStore[j] = max_word(readGapOpenScore, readGapExtendScore);
+	        // Nothing negative is allowed in score matrices
+	        pvEStore[j] = max_word(pvEStore[j], 0);
+	        
+	        int16_t refGapOpenScore = 0;
+	        int16_t refGapExtendScore = 0;
+	        if (j == 0) {
+	            // We can only end in a gap in the reference on the first read character with negative score.
+	            pvFStore[j] = subs_word(0, weight_gapO);
+	        } else {
+	            // Set the gap-in-ref matrix (F) based on previous slot in current F and in current H
+	            refGapOpenScore = subs_word(pvHStore[j-1], weight_gapO);
+	            refGapExtendScore = subs_word(pvFStore[j-1], weight_gapE);
+	            pvFStore[j] = max_word(refGapOpenScore, refGapExtendScore);
+	        }
+	        // Nothing negative is allowed in score matrices
+	        pvFStore[j] = max_word(pvFStore[j], 0);
+
+            // What score are we adding to with a match?
+            // If there's nowhere to come from it's 0.
+            int16_t matchFrom = 0;
+            if (j > 0) {
+                // Otherwise its the score where we came from
+                matchFrom = pvHLoad[j-1];
+            }
+            // What's the profile say about a match/mismatch here?
+            int16_t profileScore = profile_get_word(vProfile, readLen, j, ref[i]);
+            
+            // Compute the match/mismatch score with saturating addition.
+            int16_t matchScore = adds_word(matchFrom, profileScore);
+            // No bias
+            // We're working 16 bit with signed profile words)
+	        
+	        // Set the normal (H) matrix based on current E, current F, and match/mismatch score
+	        pvHStore[j] = max_word(max_word(pvEStore[j], pvFStore[j]), matchScore);
+	        // Nothing negative is allowed in score matrices
+	        pvHStore[j] = max_word(pvHStore[j], 0);
+
+#ifdef DEBUG_SOFTWARE_FILL
+	        // Dump the matrix as we fill it.
+	        fprintf(stderr, "(%d, %d): Read O:%hd E:%hd Ref O:%hd E:%hd Match:%hd+%hd=%hd\n",
+	            i, j,
+	            readGapOpenScore, readGapExtendScore,
+	            refGapOpenScore, refGapExtendScore,
+	            matchFrom, profileScore, matchScore);
+#endif
+	    
+	        // Set the running max
+	        if (pvHStore[j] > max) {
+	            max = pvHStore[j];
+	            end_ref = i;
+	            end_read = j;
+	        }
+	        
+	        // Copy from columns to matrices
+	        mH[i * readLen + j] = pvHStore[j];
+	        mE[i * readLen + j] = pvEStore[j];
+	        mF[i * readLen + j] = pvFStore[j];
+	    }
+	}
+	
+	// Reswizzle seeds
+	swizzle_word(pvEStore, padded_read_length);
+	swizzle_word(pvHStore, padded_read_length);
+	
+	// Save seeds.
+    memcpy(alignment->seed.pvE,      pvEStore, padded_read_length * sizeof(int16_t));
+    memcpy(alignment->seed.pvHStore, pvHStore, padded_read_length * sizeof(int16_t));
+
+    // Clean up all the buffers
+	free(pvHLoad);
+    free(pvHStore);
+    free(pvELoad);
+    free(pvEStore);
+    // No pvFLoad.
+    free(pvFStore);
+
+	/* Find the most possible 2nd best alignment. */
+	// TODO: this only does the best alignment???
+	gssw_alignment_end* bests = (gssw_alignment_end*) calloc(2, sizeof(gssw_alignment_end));
+	bests[0].score = max;
+	bests[0].ref = end_ref;
+	bests[0].read = end_read;
+
+	return bests;
+}
+
+
 gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
                                        int8_t ref_dir,	// 0: forward ref; 1: reverse ref
                                        int32_t refLen,
@@ -1366,15 +1684,29 @@ gssw_align* gssw_fill (const gssw_profile* prof,
 		if (prof->profile_word && bests[0].score == 255) {
 			free(bests);
             gssw_align_clear_matrix_and_seed(alignment);
-            bests = gssw_sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen,
-                                      alignment, seed);
+            if (gssw_sse2_enabled) {
+	            // Use SSE2
+                bests = gssw_sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen,
+                                          alignment, seed);
+            } else {
+                // Use software
+                bests = gssw_sw_software_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen,
+                                              alignment, seed);
+            }
         } else if (bests[0].score == 255) {
 			fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
 			return 0;
 		}
 	} else if (prof->profile_word) {
-		bests = gssw_sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
-                                  alignment, seed);
+	    if (gssw_sse2_enabled) {
+            // Use SSE2
+		    bests = gssw_sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
+                                      alignment, seed);
+        } else {
+            // Use software
+		    bests = gssw_sw_software_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
+                                          alignment, seed);
+        }
     } else {
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
 		return 0;
@@ -4811,7 +5143,13 @@ gssw_node_fill (gssw_node* node,
             return 0; // re-run from external context
 		}
 	} else if (prof->profile_word) {
-        bests = gssw_sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen, alignment, seed);
+	    if (gssw_sse2_enabled) {
+		    // Use SSE2
+            bests = gssw_sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen, alignment, seed);
+        } else {
+            // Use software
+            bests = gssw_sw_software_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen, alignment, seed);
+        }
     } else {
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
 		return 0;

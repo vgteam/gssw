@@ -119,7 +119,7 @@ int check_equal(int a, int b, char* const fmt, ...) {
  * Do a GSSW alignment between the two given strings. Returns a newly allocated
  * gssw_graph that the caller must destroy with gssw_graph_destroy.
  */
-gssw_graph* align_strings(char* const ref, char* const read) {
+gssw_graph* align_strings(char* const ref, char* const read, uint8_t scoreSize) {
 
     // default parameters for genome sequence alignment
     int8_t match = 1, mismatch = 4;
@@ -143,7 +143,7 @@ gssw_graph* align_strings(char* const ref, char* const read) {
     gssw_graph* graph = gssw_graph_create(1);
     gssw_graph_add_node(graph, node);
     
-    gssw_graph_fill(graph, read, nt_table, mat, gap_open, gap_extension, 0, 0, 15, 2);
+    gssw_graph_fill(graph, read, nt_table, mat, gap_open, gap_extension, 0, 0, 15, scoreSize);
 
     // Free the translation table
     free(nt_table);
@@ -156,7 +156,8 @@ gssw_graph* align_strings(char* const ref, char* const read) {
  * Returns a newly allocated gssw_graph that the caller must destroy with
  * gssw_graph_destroy.
  */
-gssw_graph* align_diamond(char* const start, char* const alt1, char* const alt2, char* const end, char* const read) {
+gssw_graph* align_diamond(char* const start, char* const alt1, char* const alt2, char* const end, char* const read,
+    uint8_t scoreSize) {
 
     // default parameters for genome sequence alignment
     int8_t match = 1, mismatch = 4;
@@ -192,7 +193,7 @@ gssw_graph* align_diamond(char* const start, char* const alt1, char* const alt2,
     gssw_graph_add_node(graph, nodes[2]);
     gssw_graph_add_node(graph, nodes[3]);
     
-    gssw_graph_fill(graph, read, nt_table, mat, gap_open, gap_extension, 0, 0, 15, 2);
+    gssw_graph_fill(graph, read, nt_table, mat, gap_open, gap_extension, 0, 0, 15, scoreSize);
 
     // Free the translation table
     free(nt_table);
@@ -319,7 +320,7 @@ int check_gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_
         
         if (!check_gssw_node_score_matrices_equal(n1, n2, readLen)) {
             // We had a mismatch between these nodes
-            printf("Matrices on node %d differ\n", i);
+            check_fail("matrices on node %d match", i+1);
             return 0;
         }
     }
@@ -332,60 +333,72 @@ int check_gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_
  * Test helper for aligning two strings and making sure it's the same in SSE2 and software modes.
  */
 void check_string_alignments_match(char* const reference, char* const read) {
-    // Do the alignment in SSE2 mode
-    gssw_sse2_enable();
-    gssw_graph* sse2_aligned = align_strings(reference, read);
-    // And in software mode
-    gssw_sse2_disable();
-    gssw_graph* software_aligned = align_strings(reference, read);
+    uint8_t scoreSize;
+    for (scoreSize = 2; scoreSize > 0; scoreSize--) {
+        // For score sizes 2 (byte with word fallback) and 1 (word only)
 
-    // Do they match?
-    int match = check_gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read));
-    
-    if (!match) {
-        // No match, so dump matrices
-        printf("SSE2 Filler:\n");
-        gssw_graph_print_score_matrices(sse2_aligned, read, strlen(read), stdout);
-        printf("Software Filler:\n");
-        gssw_graph_print_score_matrices(software_aligned, read, strlen(read), stdout);
-    }
+        // Do the alignment in SSE2 mode
+        gssw_sse2_enable();
+        gssw_graph* sse2_aligned = align_strings(reference, read, scoreSize);
+        // And in software mode
+        gssw_sse2_disable();
+        gssw_graph* software_aligned = align_strings(reference, read, scoreSize);
 
-    // Now make sure the matrices match (and fail if they didn't)
-    check_condition(match, "score matrices are identical");
+        // Do they match?
+        int match = check_gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read));
         
-    // Clean up graphs
-    gssw_graph_destroy(sse2_aligned);
-    gssw_graph_destroy(software_aligned);
+        // Now make sure the matrices match (and fail if they didn't)
+        check_condition(match, "score matrices for size mode %hhd are identical", scoreSize);
+        
+        if (!match) {
+            // No match, so dump matrices
+            printf("SSE2 Filler:\n");
+            gssw_graph_print_score_matrices(sse2_aligned, read, strlen(read), stdout);
+            printf("Software Filler:\n");
+            gssw_graph_print_score_matrices(software_aligned, read, strlen(read), stdout);
+        }
+
+        // Clean up graphs
+        gssw_graph_destroy(sse2_aligned);
+        gssw_graph_destroy(software_aligned);
+    }
 }
 
 /**
- * Test helper for aligning a string to a small graph and making sure it's the same in SSE2 and software modes.
+ * Test helper for aligning a string to a small graph and making sure it's the
+ * same in SSE2 and software modes across all score sizes.
  */
 void check_diamond_alignments_match(char* const start, char* const alt1, char* const alt2, char* const end, char* const read) {
-    // Do the alignment in SSE2 mode
-    gssw_sse2_enable();
-    gssw_graph* sse2_aligned = align_diamond(start, alt1, alt2, end, read);
-    // And in software mode
-    gssw_sse2_disable();
-    gssw_graph* software_aligned = align_diamond(start, alt1, alt2, end, read);
-
-    // Do they match?
-    int match = check_gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read));
+    uint8_t scoreSize;
+    for (scoreSize = 2; scoreSize > 0; scoreSize--) {
+        // For score sizes 2 (byte with word fallback) and 1 (word only)
     
-    if (!match) {
-        // No match, so dump matrices
-        printf("SSE2 Filler:\n");
-        gssw_graph_print_score_matrices(sse2_aligned, read, strlen(read), stdout);
-        printf("Software Filler:\n");
-        gssw_graph_print_score_matrices(software_aligned, read, strlen(read), stdout);
-    }
+        // Do the alignment in SSE2 mode
+        gssw_sse2_enable();
+        gssw_graph* sse2_aligned = align_diamond(start, alt1, alt2, end, read, scoreSize);
+        // And in software mode
+        gssw_sse2_disable();
+        gssw_graph* software_aligned = align_diamond(start, alt1, alt2, end, read, scoreSize);
 
-    // Now make sure the matrices match (and fail if they didn't)
-    check_condition(match, "score matrices are identical");
+        // Do they match?
+        int match = check_gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read));
         
-    // Clean up graphs
-    gssw_graph_destroy(sse2_aligned);
-    gssw_graph_destroy(software_aligned);
+        // Now make sure the matrices match (and fail if they didn't)
+        check_condition(match, "score matrices for size mode %hhd are identical", scoreSize);
+        
+        if (!match) {
+            // No match, so dump matrices
+            printf("SSE2 Filler:\n");
+            gssw_graph_print_score_matrices(sse2_aligned, read, strlen(read), stdout);
+            printf("Software Filler:\n");
+            gssw_graph_print_score_matrices(software_aligned, read, strlen(read), stdout);
+        }
+
+        // Clean up graphs
+        gssw_graph_destroy(sse2_aligned);
+        gssw_graph_destroy(software_aligned);
+        
+    }
 }
  
 
