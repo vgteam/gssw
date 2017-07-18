@@ -14,8 +14,29 @@
 // Test tools (basically all printf-like)
 ////////////////////////////////////////////////////////////////////////////////
 
-// Did any tests fail yet?
+// Did any tests fail? If so, how many?
 int tests_failed = 0;
+// How many tests have run?
+int tests_run = 0;
+
+/**
+ * Print the result report an dprovide the return code for main.
+ */
+int test_results() {
+    if (tests_failed) {
+        printf("!!!FAILURE!!!\n");
+    } else {
+        printf("+++SUCCESS+++\n");
+    }
+    printf("Ran %d tests with %d failures.\n", tests_run, tests_failed);
+
+    if (tests_failed) {
+        return 1;
+    }
+}
+
+// Has the current test failed?
+int test_current_failed = 0;
 
 /**
  * Note that a test is starting. Give the name of the thing being tested.
@@ -50,6 +71,12 @@ void start_test(char* const fmt, ...) {
 	vprintf(fmt, argp);
 	printf(".\n");
     va_end(argp);
+    
+    // Say we're runn ing a test
+    tests_run++;
+    
+    // Reset the test failure flag.
+    test_current_failed = 0;
 }
 
 /**
@@ -60,9 +87,12 @@ void vcheck_fail(char* const fmt, va_list argp) {
     printf("\t\t[FAIL] ");
     vprintf(fmt, argp);
     printf("\n");
-        
-    // Don't abort this test yet; continue until the next test.
-    tests_failed = 1;
+    
+    if (!test_current_failed) {
+        // This made the test fail
+        test_current_failed = 1;
+        tests_failed++;
+    }
 }
 
 /**
@@ -500,7 +530,7 @@ int main (int argc, char * const argv[]) {
     // Run all the tests
     test_gssw_software_fill();
 
-    // Return 0 if they succeeded, and 1 otherwise.
-    return tests_failed;
+    // Report result
+    return test_results();
 }
  

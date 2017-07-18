@@ -10,7 +10,7 @@ EXE=gssw_example
 EXEADJ=gssw_example_adj
 EXETEST=gssw_test
 
-.PHONY:all clean cleanlocal
+.PHONY:all clean cleanlocal test
 
 all:$(BIN_DIR)/$(EXE) $(BIN_DIR)/$(EXEADJ) $(BIN_DIR)/$(EXETEST) $(LIB_DIR)/libgssw.a
 
@@ -34,6 +34,9 @@ $(OBJ_DIR)/$(OBJ):$(SRC_DIR)/gssw.h $(SRC_DIR)/gssw.c
 $(LIB_DIR)/libgssw.a:$(OBJ_DIR)/$(OBJ)
 	@mkdir -p $(@D)
 	ar rvs $@ $<
+	
+test:$(BIN_DIR)/$(EXETEST)
+	$(BIN_DIR)/$(EXETEST)
 
 cleanlocal:
 	$(RM) -r lib/
