@@ -759,7 +759,12 @@ void gssw_add_alignment(gssw_multi_align_stack* stack, gssw_alternate_alignment_
     
 /* Retuns the lowest score of an alternate alignment in the stack */
 int16_t gssw_min_alt_alignment_score(gssw_multi_align_stack* stack);
-    
+
+/* Turn on the SSE2 matrix filler (which is on by default) */    
+void gssw_sse2_enable();
+
+/* Turn off the SSE2 matrix filler and use a pure software implementation */
+void gssw_sse2_disable();
     
 #ifdef __cplusplus
 }

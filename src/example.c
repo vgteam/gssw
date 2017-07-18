@@ -26,6 +26,8 @@ int main (int argc, char * const argv[]) {
     char *ref_seq_4 = argv[4];
     char *read_seq = argv[5];
 
+    gssw_sse2_disable();
+
 	/* This table is used to transform nucleotide letters into numbers. */
     int8_t* nt_table = gssw_create_nt_table();
     

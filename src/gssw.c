@@ -46,6 +46,7 @@
 #include "gssw.h"
 
 //#define DEBUG_TRACEBACK
+//#define DEBUG_SOFTWARE_FILL
 
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
@@ -67,6 +68,28 @@
   @discussion x will be modified.
  */
 #define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
+
+/**
+ * We can turn SSE2 on and off globally, for testing purposes. When SSE2 is off
+ * we use a non-SIMD pure software matrix filler, which is easier to believe is
+ * correct by inspection.
+ */
+int gssw_sse2_enabled = 1;
+
+/**
+ * Disable SSE2 matrix filler and use the pure software matrix filler.
+ */
+void gssw_sse2_disable() {
+    gssw_sse2_enabled = 0;
+}
+
+/**
+ * Enable SSE2 matrix filler.
+ */
+void gssw_sse2_enable() {
+    gssw_sse2_enabled = 1;
+}
+
 
 /* Generate query profile rearrange query sequence & calculate the weight of match/mismatch. */
 __m128i* gssw_qP_byte (const int8_t* read_num,
@@ -200,10 +223,56 @@ uint8_t profile_get_byte(__m128i* vProfile, int32_t readLen, int32_t read_positi
 }
 
 /**
+ * Swizzle a vector of bytes into a "striped" vector, organized first by
+ * position in segment and then by segment of 16. Size must be a multiple of 16.
+ */
+void swizzle_byte(uint8_t* to_swizzle, int32_t size) {
+    if (size == 0) {
+        // Nothing to do!
+        return;
+    }
+    
+    uint8_t* scratch = (uint8_t*) malloc(size * sizeof(uint8_t));
+    if(scratch == NULL) {
+        fprintf(stderr, "error:[gssw] Could not allocate swizzle buffer.\n");
+        exit(1);
+    }
+    // Copy the data out of the way
+    memcpy(scratch, to_swizzle, size);
+    
+    // How long is a segment? We have 16.
+    int32_t segLen = (size + 15) / 16;
+    
+    // We'll walk this through the destination array.
+    int32_t cursor = 0;
+    
+    int32_t pos_in_segment;
+    for(pos_in_segment = 0; pos_in_segment < segLen; pos_in_segment++) {
+        // For each position in a segment
+    
+        int32_t segNum;
+        for (segNum = 0; segNum < 16; segNum++) {
+            // For each segment
+    
+            // Grab the byte
+            to_swizzle[cursor] = scratch[segNum * segLen + pos_in_segment];
+            // Write the next byte at the next position
+            cursor++;
+        }
+        
+    }
+}
+
+/**
  * Unswizzle a swizzled vector of bytes into a normal start-to-end vector of bytes.
  * Size must be a multiple of 16.
  */
 void unswizzle_byte(uint8_t* to_unswizzle, int32_t size) {
+    if (size == 0) {
+        // Nothing to do!
+        return;
+    }
+    
     uint8_t* scratch = (uint8_t*) malloc(size * sizeof(uint8_t));
     if(scratch == NULL) {
         fprintf(stderr, "error:[gssw] Could not allocate unswizzle buffer.\n");
@@ -380,20 +449,21 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
 	        uint8_t readGapExtendScore = subs_byte(pvELoad[j], weight_gapE);
 	        pvEStore[j] = max_byte(readGapOpenScore, readGapExtendScore);
 	        
+	        uint8_t refGapOpenScore = 0;
+	        uint8_t refGapExtendScore = 0;
 	        if (j == 0) {
 	            // We can only end in a gap in the reference on the first read character with negative score.
-	            // TODO: should we use bias as 0 in here or what?
 	            pvFStore[j] = subs_byte(bias, weight_gapO);
 	        } else {
 	            // Set the gap-in-ref matrix (F) based on previous slot in current F and in current H
-	            uint8_t refGapOpenScore = subs_byte(pvHStore[j-1], weight_gapO);
-	            uint8_t refGapExtendScore = subs_byte(pvFStore[j-1], weight_gapE);
+	            refGapOpenScore = subs_byte(pvHStore[j-1], weight_gapO);
+	            refGapExtendScore = subs_byte(pvFStore[j-1], weight_gapE);
 	            pvFStore[j] = max_byte(refGapOpenScore, refGapExtendScore);
 	        }
 
             // What score are we adding to with a match?
-            // If there's nowhere to come from it's 0 (i.e. the bias)
-            uint8_t matchFrom = bias;
+            // If there's nowhere to come from it's 0.
+            uint8_t matchFrom = 0;
             if (j > 0) {
                 // Otherwise its the score where we came from
                 matchFrom = pvHLoad[j-1];
@@ -403,9 +473,20 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
             
             // Compute the match/mismatch score with saturating addition.
             uint8_t matchScore = adds_byte(matchFrom, profileScore);
+            // Subtract out the bias that the profile score had on it.
+            matchScore = subs_byte(matchScore, bias);
 	        
 	        // Set the normal (H) matrix based on current E, current F, and match/mismatch score
 	        pvHStore[j] = max_byte(max_byte(pvEStore[j], pvFStore[j]), matchScore);
+	        
+#ifdef DEBUG_SOFTWARE_FILL
+	        // Dump the matrix as we fill it.
+	        fprintf(stderr, "(%d, %d): Read O:%hhu E:%hhu Ref O:%hhu E:%hhu Match:%hhu+%hhu-%hhu=%hhu\n",
+	            i, j,
+	            readGapOpenScore, readGapExtendScore,
+	            refGapOpenScore, refGapExtendScore,
+	            matchFrom, profileScore, bias, matchScore);
+#endif
 	    
 	        // Set the running max
 	        if (pvHStore[j] > max) {
@@ -413,12 +494,17 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
 	            end_ref = i;
 	            end_read = j;
 	        }
+	        
+	        // Copy from columns to matrices
+	        mH[i * readLen + j] = pvHStore[j];
+	        mE[i * readLen + j] = pvEStore[j];
+	        mF[i * readLen + j] = pvFStore[j];
 	    }
-	    
-	    // TODO: Blit from columns to matrices
 	}
 	
-	// TODO: reswizzle seeds
+	// Reswizzle seeds
+	swizzle_byte(pvEStore, padded_read_length);
+	swizzle_byte(pvHStore, padded_read_length);
 	
 	// Save seeds.
     memcpy(alignment->seed.pvE,      pvEStore, padded_read_length);
@@ -1265,8 +1351,17 @@ gssw_align* gssw_fill (const gssw_profile* prof,
 
 	// Find the alignment scores and ending positions
 	if (prof->profile_byte) {
-		bests = gssw_sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen,
-                             alignment, seed);
+	    // Do a byte-sized fill
+	    
+	    if (gssw_sse2_enabled) {
+	        // Use SSE2
+		    bests = gssw_sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE,
+		                              prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
+        } else {
+            // Use software
+            bests = gssw_sw_software_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE,
+		                                  prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
+        }
 
 		if (prof->profile_word && bests[0].score == 255) {
 			free(bests);
@@ -4701,7 +4796,15 @@ gssw_node_fill (gssw_node* node,
 
 	// Find the alignment scores and ending positions
 	if (prof->profile_byte) {
-		bests = gssw_sw_sse2_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
+	    // Do a byte-sized fill
+	    
+	    if (gssw_sse2_enabled) {
+		    // Use SSE2
+		    bests = gssw_sw_sse2_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
+	    } else {
+	        // Use pure software
+	        bests = gssw_sw_software_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
+	    }
 		if (bests[0].score == 255) {
 			free(bests);
             gssw_align_clear_matrix_and_seed(alignment);
