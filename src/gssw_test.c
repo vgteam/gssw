@@ -152,6 +152,55 @@ gssw_graph* align_strings(char* const ref, char* const read) {
 }
 
 /**
+ * Do a GSSW alignment between the given diamond graph and the given read.
+ * Returns a newly allocated gssw_graph that the caller must destroy with
+ * gssw_graph_destroy.
+ */
+gssw_graph* align_diamond(char* const start, char* const alt1, char* const alt2, char* const end, char* const read) {
+
+    // default parameters for genome sequence alignment
+    int8_t match = 1, mismatch = 4;
+    uint8_t gap_open = 6, gap_extension = 1;
+
+	/* This table is used to transform nucleotide letters into numbers. */
+    int8_t* nt_table = gssw_create_nt_table();
+    
+	// initialize scoring matrix for genome sequences
+	//  A  C  G  T	N (or other ambiguous code)
+	//  2 -2 -2 -2 	0	A
+	// -2  2 -2 -2 	0	C
+	// -2 -2  2 -2 	0	G
+	// -2 -2 -2  2 	0	T
+	//	0  0  0  0  0	N (or other ambiguous code)
+    int8_t* mat = gssw_create_score_matrix(match, mismatch);
+
+    gssw_node* nodes[4];
+    nodes[0] = (gssw_node*)gssw_node_create("A", 1, start, nt_table, mat);
+    nodes[1] = (gssw_node*)gssw_node_create("B", 2, alt1, nt_table, mat);
+    nodes[2] = (gssw_node*)gssw_node_create("C", 3, alt2, nt_table, mat);
+    nodes[3] = (gssw_node*)gssw_node_create("D", 4, end, nt_table, mat);
+    
+    // makes a diamond
+    gssw_nodes_add_edge(nodes[0], nodes[1]);
+    gssw_nodes_add_edge(nodes[0], nodes[2]);
+    gssw_nodes_add_edge(nodes[1], nodes[3]);
+    gssw_nodes_add_edge(nodes[2], nodes[3]);
+    
+    gssw_graph* graph = gssw_graph_create(4);
+    gssw_graph_add_node(graph, nodes[0]);
+    gssw_graph_add_node(graph, nodes[1]);
+    gssw_graph_add_node(graph, nodes[2]);
+    gssw_graph_add_node(graph, nodes[3]);
+    
+    gssw_graph_fill(graph, read, nt_table, mat, gap_open, gap_extension, 0, 0, 15, 2);
+
+    // Free the translation table
+    free(nt_table);
+    
+    return graph;
+}
+
+/**
  * Compare score matrices for two filled nodes. Return 1 if they are equal and 0
  * otherwise.
  */
@@ -280,15 +329,45 @@ int check_gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_
 }
 
 /**
- * Test helper for aligning two strings and making sure they match.
+ * Test helper for aligning two strings and making sure it's the same in SSE2 and software modes.
  */
-void check_alignments_match(char* const reference, char* const read) {
+void check_string_alignments_match(char* const reference, char* const read) {
     // Do the alignment in SSE2 mode
     gssw_sse2_enable();
     gssw_graph* sse2_aligned = align_strings(reference, read);
     // And in software mode
     gssw_sse2_disable();
     gssw_graph* software_aligned = align_strings(reference, read);
+
+    // Do they match?
+    int match = check_gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read));
+    
+    if (!match) {
+        // No match, so dump matrices
+        printf("SSE2 Filler:\n");
+        gssw_graph_print_score_matrices(sse2_aligned, read, strlen(read), stdout);
+        printf("Software Filler:\n");
+        gssw_graph_print_score_matrices(software_aligned, read, strlen(read), stdout);
+    }
+
+    // Now make sure the matrices match (and fail if they didn't)
+    check_condition(match, "score matrices are identical");
+        
+    // Clean up graphs
+    gssw_graph_destroy(sse2_aligned);
+    gssw_graph_destroy(software_aligned);
+}
+
+/**
+ * Test helper for aligning a string to a small graph and making sure it's the same in SSE2 and software modes.
+ */
+void check_diamond_alignments_match(char* const start, char* const alt1, char* const alt2, char* const end, char* const read) {
+    // Do the alignment in SSE2 mode
+    gssw_sse2_enable();
+    gssw_graph* sse2_aligned = align_diamond(start, alt1, alt2, end, read);
+    // And in software mode
+    gssw_sse2_disable();
+    gssw_graph* software_aligned = align_diamond(start, alt1, alt2, end, read);
 
     // Do they match?
     int match = check_gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read));
@@ -322,36 +401,36 @@ void check_alignments_match(char* const reference, char* const read) {
 void test_gssw_software_fill() {
     {start_case("The GSSW matrix filler");
         {start_test("should produce identical results for a small single-node graph");
-            check_alignments_match("GATTACA", "GATTTACA");
+            check_string_alignments_match("GATTACA", "GATTTACA");
         }
         
         {start_test("should produce identical results on short identical strings");
             char* const reference = "GATTACA";
-            check_alignments_match(reference, reference);
+            check_string_alignments_match(reference, reference);
         }
         
         {start_test("should produce identical results on large inserts");
-            check_alignments_match("GATTACA", "GATTTTTTTTTTTTTTACA");
+            check_string_alignments_match("GATTACA", "GATTTTTTTTTTTTTTACA");
         }
         
         {start_test("should produce identical results on large deletions");
-            check_alignments_match("GATTTTTTTTTTTTTTACA", "GATTACA");
+            check_string_alignments_match("GATTTTTTTTTTTTTTACA", "GATTACA");
         }
         
         {start_test("should produce identical results on empty strings");
-            check_alignments_match("", "");
+            check_string_alignments_match("", "");
         }
         
         {start_test("should produce identical results on 15 As");
-            check_alignments_match("AAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAA");
+            check_string_alignments_match("AAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAA");
         }
         
         {start_test("should produce identical results on 17 As");
-            check_alignments_match("AAAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAA");
+            check_string_alignments_match("AAAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAA");
         }
         
         {start_test("should produce identical results on 16 As");
-            check_alignments_match("AAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAA");
+            check_string_alignments_match("AAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAA");
         }
         
         {
@@ -359,15 +438,43 @@ void test_gssw_software_fill() {
             int32_t i;
             for (i = strlen(reference); i >= 0; i--) {
                 {start_test("should produce identical results on a %d bp string", strlen(reference) - i);
-                    check_alignments_match(&reference[i], &reference[i]);
+                    check_string_alignments_match(&reference[i], &reference[i]);
                 }
             }
+        }
+        
+        {start_test("should produce identical results on a small diamond");
+            check_diamond_alignments_match("GA", "TTA", "TA", "CA", "GATTACA");
         }
         
         {start_test("should produce identical results for a larger single-node graph with more differences");
             char* const reference = "GTGTTCCAGTTCTTATCCTATATCGGAAGTTCAATTATACATCGCACCAGCATATTCATG";
             char* const read = "GTGTTCAAGTTCATCGGAAGTTCAATTCTACATCGCACCAGCATATAAGATAAATTTCTTG";
-            check_alignments_match(reference, read);
+            check_string_alignments_match(reference, read);
+        }
+        
+        {start_test("should produce identical results for Jordan's edge case");
+            char* const reference = "CCCCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCCCCCCCCCCCCACCCCCCCCCCACCCCCCCCCCTCCCACCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
+            char* const read = "CCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCCCCCCCCCCCCACCCCCCCCCCACCCCCCCCCCTCCCACCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
+            check_string_alignments_match(reference, read);
+        }
+        
+        {start_test("should produce identical results for Jordan's other edge case");
+            char* const reference = "CCCCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCCCCCCCACCCCCCCCGTCCCCCCCCCCCACCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
+            char* const read = "CCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCCCCCCCCCCCCACCCCCCCCCCACCCCCCCCCCTCCCACCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
+            check_string_alignments_match(reference, read);
+        }
+        
+        {start_test("should produce identical results for Jordan's diamond");
+            char* const start = "CCCCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCC";
+            char* const alt1 = "CCCCCCCCCCACCCCCCCCCCACCCCCCCCCCTCCCA";
+            char* const alt2 = "CCCCCACCCCCCCCGTCCCCCCCCCCCA";
+            char* const end = "CCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
+            char* const read = "CCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCCCCCCCCCCCCACCCCCCCCCCACCCCCCCCCCTCCCACCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
+            
+            check_diamond_alignments_match(start, alt1, alt2, end, read);
+        
+            
         }
     }
         
