@@ -4,13 +4,14 @@
  */
  
 #include <assert.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include "gssw.h"
 
 ////////////////////////////////////////////////////////////////////////////////
-// Test tools
+// Test tools (basically all printf-like)
 ////////////////////////////////////////////////////////////////////////////////
 
 // Did any tests fail yet?
@@ -20,56 +21,94 @@ int tests_failed = 0;
  * Note that a test is starting. Give the name of the thing being tested.
  * Say something like "MyModule".
  */
-void start_case(char* const name) {
+void start_case(char* const fmt, ...) {
     if (tests_failed) {
         // Stop!
         exit(1);
     }
-    printf("%s...\n", name);
+    // Print name, forwarding args
+    va_list argp;
+	va_start(argp, fmt);
+	vprintf(fmt, argp);
+	printf("...\n");
+    va_end(argp);
 }
 
 /**
  * Note that a tert is starting. Say the property being tested.
  * Say something like "should do the thing".
  */
-void start_test(char* const property) {
+void start_test(char* const fmt, ...) {
     if (tests_failed) {
         // Stop!
         exit(1);
     }
-    printf("\t%s.\n", property);
+    // Print property, forwarding args
+    va_list argp;
+	va_start(argp, fmt);
+	printf("\t");
+	vprintf(fmt, argp);
+	printf(".\n");
+    va_end(argp);
+}
+
+/**
+ * Fail a test with the given message.
+ */
+void vcheck_fail(char* const fmt, va_list argp) {
+    // Report the message
+    printf("\t\t[FAIL] ");
+    vprintf(fmt, argp);
+    printf("\n");
+        
+    // Don't abort this test yet; continue until the next test.
+    tests_failed = 1;
+}
+
+/**
+ * Fail a test with the given message.
+ */
+void check_fail(char* const fmt, ...) {
+    // Delegate to the version that takes forwarded arguments
+    va_list argp;
+	va_start(argp, fmt);
+    vcheck_fail(fmt, argp);
+    va_end(argp);
 }
 
 /**
  * Make sure the condition is true.
+ * Returns whether it is true.
  */
-void check_condition(int condition, char* const message) {
-    if(condition) {
-        // Do nothing on success
-    } else {
+int check_condition(int condition, char* const fmt, ...) {
+    
+    va_list argp;
+    va_start(argp, fmt);
+    if (!condition) {
         // Report failure
-        printf("\t\t[FAIL] %s\n", message);
-        
-        // Don't abort this test yet; continue until the next test.
-        tests_failed = 1;
+        vcheck_fail(fmt, argp);
     }
-    
-    
+    va_end(argp);
+    return condition;
 }
 
 /**
  * Make sure the two integers are equal.
+ * Returns whether they are equal.
  */
-void check_equal(int a, int b, const char* message) {
-    if (a == b) {
-        // Do nothing on success
-    } else {
+int check_equal(int a, int b, char* const fmt, ...) {
+    va_list argp;
+    va_start(argp, fmt);
+    int condition = (a == b);
+    if (!condition) {
         // Report failure
-        printf("\t\t[FAIL] %s: (%d != %d)\n", message, a, b);
+        vcheck_fail(fmt, argp);
         
-        // Don't abort this test yet; continue until the next test.
-        tests_failed = 1;
+        // Report difference
+        printf("\t\t\t%d != %d\n", a, b);
     }
+    va_end(argp);
+    return condition;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -116,10 +155,9 @@ gssw_graph* align_strings(char* const ref, char* const read) {
  * Compare score matrices for two filled nodes. Return 1 if they are equal and 0
  * otherwise.
  */
-int gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t readLen) {
+int check_gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t readLen) {
     // Nodes must be the same length
-    if (n1->len != n2->len) {
-        printf("Node lengths differ: %d vs. %d\n", n1->len, n2->len);
+    if (!check_equal(n1->len, n2->len, "node lengths equal")) {
         return 0;
     }
 
@@ -127,9 +165,8 @@ int gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t readLen
     gssw_align* a1 = n1->alignment;
     gssw_align* a2 = n2->alignment;
     
-    if (gssw_is_byte(a1) != gssw_is_byte(a2)) {
+    if (!check_equal(gssw_is_byte(a1), gssw_is_byte(a2), "matrix types equal")) {
         // Both alignments should be the same score size
-        printf("Matrix types differ: %d vs. %d\n", gssw_is_byte(a1), gssw_is_byte(a2));
         return 0;
     }
     
@@ -151,16 +188,22 @@ int gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t readLen
             for (i = 0; i < n1->len; ++i) {
                 // For each column (ref base)
                 
-                if (mH1[i * readLen + j] != mH2[i * readLen + j]) {
-                    // Main (H) matrices don't match
-                    return 0;
-                }
-                if (mE1[i * readLen + j] != mE2[i * readLen + j]) {
+                if (!check_equal(mE1[i * readLen + j], mE2[i * readLen + j],
+                    "gap in read entries (%d,%d) match", i, j)) {
+                    
                     // Gap in read (E) matrices don't match
                     return 0;
                 }
-                if (mF1[i * readLen + j] != mF2[i * readLen + j]) {
+                if (!check_equal(mF1[i * readLen + j], mF2[i * readLen + j],
+                    "gap in ref entries (%d,%d) match", i, j)) {
+                    
                     // Gap in ref (F) matrices don't match
+                    return 0;
+                }
+                if (!check_equal(mH1[i * readLen + j], mH2[i * readLen + j],
+                    "best overall entries (%d,%d) match", i, j)) {\
+                    
+                    // Main (H) matrices don't match
                     return 0;
                 }
             }
@@ -183,16 +226,22 @@ int gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t readLen
             for (i = 0; i < n1->len; ++i) {
                 // For each column (ref base)
                 
-                if (mH1[i * readLen + j] != mH2[i * readLen + j]) {
-                    // Main (H) matrices don't match
-                    return 0;
-                }
-                if (mE1[i * readLen + j] != mE2[i * readLen + j]) {
+                if (!check_equal(mE1[i * readLen + j], mE2[i * readLen + j],
+                    "gap in read entries (%d,%d) match", i, j)) {
+                    
                     // Gap in read (E) matrices don't match
                     return 0;
                 }
-                if (mF1[i * readLen + j] != mF2[i * readLen + j]) {
+                if (!check_equal(mF1[i * readLen + j], mF2[i * readLen + j],
+                    "gap in ref entries (%d,%d) match", i, j)) {
+                    
                     // Gap in ref (F) matrices don't match
+                    return 0;
+                }
+                if (!check_equal(mH1[i * readLen + j], mH2[i * readLen + j],
+                    "best overall entries (%d,%d) match", i, j)) {\
+                    
+                    // Main (H) matrices don't match
                     return 0;
                 }
             }
@@ -208,10 +257,9 @@ int gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t readLen
  * Compare the score matrices for two filled graphs. Return 1 if they are equal
  * and 0 otherwise.
  */
-int gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_t readLen) {
-    if (g1->size != g2->size) {
+int check_gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_t readLen) {
+    if (!check_equal(g1->size, g2->size, "graph sizes match")) {
         // Different graph sizes/shapes
-        printf("Matrix sizes differ: %d vs. %d\n", g1->size, g2->size);
         return 0;
     }
     
@@ -220,7 +268,7 @@ int gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_t read
         gssw_node* n1 = g1->nodes[i];
         gssw_node* n2 = g2->nodes[i];
         
-        if (!gssw_node_score_matrices_equal(n1, n2, readLen)) {
+        if (!check_gssw_node_score_matrices_equal(n1, n2, readLen)) {
             // We had a mismatch between these nodes
             printf("Matrices on node %d differ\n", i);
             return 0;
@@ -243,14 +291,14 @@ void check_alignments_match(char* const reference, char* const read) {
     gssw_graph* software_aligned = align_strings(reference, read);
 
     // Do they match?
-    int match = gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read));
+    int match = check_gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read));
     
     if (!match) {
         // No match, so dump matrices
         printf("SSE2 Filler:\n");
         gssw_graph_print_score_matrices(sse2_aligned, read, strlen(read), stdout);
         printf("Software Filler:\n");
-        gssw_graph_print_score_matrices(sse2_aligned, read, strlen(read), stdout);
+        gssw_graph_print_score_matrices(software_aligned, read, strlen(read), stdout);
     }
 
     // Now make sure the matrices match (and fail if they didn't)
@@ -302,12 +350,13 @@ void test_gssw_software_fill() {
             check_alignments_match("AAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAA");
         }
         
-        {start_test("should produce identical results on all suffixes of a longer string");
+        {
             char* const reference = "GTGTTCCAGTTCTTATCCTATATCGGAAGTTCAATTATACATCGCACCAGCATATTCATG";
             int32_t i;
             for (i = strlen(reference); i >= 0; i--) {
-                printf("Checking: %s, %s\n", &reference[i], &reference[i]);
-                check_alignments_match(&reference[i], &reference[i]);
+                {start_test("should produce identical results on a %d bp string", i);
+                    check_alignments_match(&reference[i], &reference[i]);
+                }
             }
         }
         
