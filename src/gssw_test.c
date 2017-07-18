@@ -204,6 +204,28 @@ int gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_t read
     return 1;
 }
 
+/**
+ * Test helper for aligning two strings and making sure they match.
+ */
+void check_alignments_match(char* const reference, char* const read) {
+    // Do the alignment in SSE2 mode
+    gssw_sse2_enable();
+    gssw_graph* sse2_aligned = align_strings(reference, read);
+    // And in software mode
+    gssw_sse2_disable();
+    gssw_graph* software_aligned = align_strings(reference, read);
+
+    // Now make sure the matrices match
+    check_condition(gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read)),
+        "score matrices are identical");
+        
+    // Clean up graphs
+    gssw_graph_destroy(sse2_aligned);
+    gssw_graph_destroy(software_aligned);
+}
+ 
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // Test cases
 ////////////////////////////////////////////////////////////////////////////////
@@ -215,38 +237,47 @@ int gssw_graph_score_matrices_equal(gssw_graph* g1, gssw_graph* g2, int32_t read
 void test_gssw_software_fill() {
     {start_case("The GSSW matrix filler");
         {start_test("should produce identical results for a small single-node graph");
+            check_alignments_match("GATTACA", "GATTTACA");
+        }
         
-            // Define what to align
+        {start_test("should produce identical results on short identical strings");
             char* const reference = "GATTACA";
-            char* const read = "GATTTACA";
-            
-            // Do the alignment in SSE2 mode
-            gssw_sse2_enable();
-            gssw_graph* sse2_aligned = align_strings(reference, read);
-            // And in software mode
-            gssw_sse2_disable();
-            gssw_graph* software_aligned = align_strings(reference, read);
-            
-            // Now make sure the matrices match
-            check_condition(gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read)),
-                "score matrices are identical");
+            check_alignments_match(reference, reference);
+        }
+        
+        {start_test("should produce identical results on large inserts");
+            check_alignments_match("GATTACA", "GATTTTTTTTTTTTTTACA");
+        }
+        
+        {start_test("should produce identical results on large deletions");
+            check_alignments_match("GATTTTTTTTTTTTTTACA", "GATTACA");
+        }
+        
+        {start_test("should produce identical results on empty strings");
+            check_alignments_match("", "");
+        }
+        
+        {start_test("should produce identical results on 15 As");
+            check_alignments_match("AAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAA");
+        }
+        
+        {start_test("should produce identical results on 16 As");
+            check_alignments_match("AAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAA");
+        }
+        
+        {start_test("should produce identical results on all suffixes of a longer string");
+            char* const reference = "GTGTTCCAGTTCTTATCCTATATCGGAAGTTCAATTATACATCGCACCAGCATATTCATG";
+            int32_t i;
+            for (i = strlen(reference); i >= 0; i--) {
+                printf("Checking: %s, %s\n", &reference[i], &reference[i]);
+                check_alignments_match(&reference[i], &reference[i]);
+            }
         }
         
         {start_test("should produce identical results for a larger single-node graph with more differences");
-            // Define what to align
             char* const reference = "GTGTTCCAGTTCTTATCCTATATCGGAAGTTCAATTATACATCGCACCAGCATATTCATG";
             char* const read = "GTGTTCAAGTTCATCGGAAGTTCAATTCTACATCGCACCAGCATATAAGATAAATTTCTTG";
-            
-            // Do the alignment in SSE2 mode
-            gssw_sse2_enable();
-            gssw_graph* sse2_aligned = align_strings(reference, read);
-            // And in software mode
-            gssw_sse2_disable();
-            gssw_graph* software_aligned = align_strings(reference, read);
-            
-            // Now make sure the matrices match
-            check_condition(gssw_graph_score_matrices_equal(sse2_aligned, software_aligned, strlen(read)),
-                "score matrices are identical");
+            check_alignments_match(reference, read);
         }
     }
         
