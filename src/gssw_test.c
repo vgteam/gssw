@@ -268,12 +268,12 @@ int check_gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t r
             for (i = 0; i < n1->len; ++i) {
                 // For each column (ref base)
                 
-                /*if (!check_equal(mE1[i * readLen + j], mE2[i * readLen + j],
+                if (!check_equal(mE1[i * readLen + j], mE2[i * readLen + j],
                     "gap in read E entries (%d,%d) match", i, j)) {
                     
                     // Gap in read (E) matrices don't match
                     return 0;
-                }*/
+                }
                 /*if (!check_equal(mF1[i * readLen + j], mF2[i * readLen + j],
                     "gap in ref F entries (%d,%d) match", i, j)) {
                     
@@ -306,12 +306,12 @@ int check_gssw_node_score_matrices_equal(gssw_node* n1, gssw_node* n2, int32_t r
             for (i = 0; i < n1->len; ++i) {
                 // For each column (ref base)
                 
-                /*if (!check_equal(mE1[i * readLen + j], mE2[i * readLen + j],
+                if (!check_equal(mE1[i * readLen + j], mE2[i * readLen + j],
                     "gap in read E entries (%d,%d) match", i, j)) {
                     
                     // Gap in read (E) matrices don't match
                     return 0;
-                }*/
+                }
                 /*if (!check_equal(mF1[i * readLen + j], mF2[i * readLen + j],
                     "gap in ref F entries (%d,%d) match", i, j)) {
                     
@@ -443,6 +443,27 @@ void check_diamond_alignments_match(char* const start, char* const alt1, char* c
  */
 void test_gssw_software_fill() {
     {start_case("The GSSW matrix filler");
+        {start_test("should produce identical results for Jordan's smaller case");
+            char* const ref = "CCCCCCCCCTCCCCCCCCCCT";
+            char* const read = "CCCCCCCTCCCCCCCCCCTCC";
+            
+            check_string_alignments_match(ref, read);
+        
+            
+        }
+    
+        {start_test("should produce identical results for Jordan's diamond");
+            char* const start = "CCCCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCC";
+            char* const alt1 = "CCCCCCCCCCACCCCCCCCCCACCCCCCCCCCTCCCA";
+            char* const alt2 = "CCCCCACCCCCCCCGTCCCCCCCCCCCA";
+            char* const end = "CCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
+            char* const read = "CCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCCCCCCCCCCCCACCCCCCCCCCACCCCCCCCCCTCCCACCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
+            
+            check_diamond_alignments_match(start, alt1, alt2, end, read);
+        
+            
+        }
+    
         {start_test("should produce identical results for a small single-node graph");
             check_string_alignments_match("GATTACA", "GATTTACA");
         }
@@ -508,17 +529,6 @@ void test_gssw_software_fill() {
             check_string_alignments_match(reference, read);
         }
         
-        {start_test("should produce identical results for Jordan's diamond");
-            char* const start = "CCCCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCC";
-            char* const alt1 = "CCCCCCCCCCACCCCCCCCCCACCCCCCCCCCTCCCA";
-            char* const alt2 = "CCCCCACCCCCCCCGTCCCCCCCCCCCA";
-            char* const end = "CCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
-            char* const read = "CCCCCCCTCCCCCCCCCCTCCCCCCCCCCGACCCCCCCCCCCCCCCCCCCCCACCCCCCCCCCACCCCCCCCCCTCCCACCCCCCCCCCCCGCCCCCCCCCCGCCCCCCCCC";
-            
-            check_diamond_alignments_match(start, alt1, alt2, end, read);
-        
-            
-        }
     }
         
     
