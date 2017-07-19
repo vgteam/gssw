@@ -543,6 +543,12 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
     (vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 4)); \
     (vm) = _mm_max_epi16((vm), _mm_srli_si128((vm), 2)); \
     (m) = _mm_extract_epi16((vm), 0)
+    
+// See https://stackoverflow.com/q/33824300 for this unsigned comparison macro
+// for the missing unsigned comparison instruction _mm_cmpgt_epu8
+#define m128i_cmpgt(v0, v1) \
+         _mm_cmpgt_epi8(_mm_xor_si128(v0, _mm_set1_epi8(-128)), \
+                        _mm_xor_si128(v1, _mm_set1_epi8(-128)))
 
 /* Striped Smith-Waterman
    Record the highest score of each reference position.
@@ -764,22 +770,16 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         // We're also looking at the H values that should be derived from those
         // F values.
         
-// See https://stackoverflow.com/q/33824300 for this unsigned comparison macro
-// for the missing unsigned comparison instruction
-#define _mm_cmpgt_epu8(v0, v1) \
-         _mm_cmpgt_epi8(_mm_xor_si128(v0, _mm_set1_epi8(-128)), \
-                        _mm_xor_si128(v1, _mm_set1_epi8(-128)))
-        
         // Now we need to work out if we actually want to update anything. We
         // need to do an F loop if we would modify H, or if we would improve
         // over the old F.
         
         // If we beat the stored H
-        vTemp = _mm_cmpgt_epu8 (vF, vH);
+        vTemp = m128i_cmpgt (vF, vH);
         cmp = _mm_movemask_epi8 (vTemp);
         // Or we beat the stored F
         vTemp = _mm_load_si128 (pvFStore + j);
-        vTemp = _mm_cmpgt_epu8 (vF, vTemp);
+        vTemp = m128i_cmpgt (vF, vTemp);
         cmp |= _mm_movemask_epi8 (vTemp);
         while (cmp != 0x0000)
         {
@@ -830,11 +830,11 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             vH = _mm_load_si128 (pvHStore + j);
             
             // See if we beat the stored H
-            vTemp = _mm_cmpgt_epu8 (vF, vH);
+            vTemp = m128i_cmpgt (vF, vH);
             cmp = _mm_movemask_epi8 (vTemp);
             // Or if we beat the stored F
             vTemp = _mm_load_si128 (pvFStore + j);
-            vTemp = _mm_cmpgt_epu8 (vF, vTemp);
+            vTemp = m128i_cmpgt (vF, vTemp);
             cmp |= _mm_movemask_epi8 (vTemp);
         }
 
