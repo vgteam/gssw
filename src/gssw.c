@@ -653,6 +653,8 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         step = -1;
     }
     for (i = begin; LIKELY(i != end); i += step) {
+        // For each column
+    
         int32_t cmp;
         __m128i e = vZero, vF = vZero, vMaxColumn = vZero; /* Initialize F value to 0.
                                Any errors to vH values will be corrected in the Lazy_F loop.
@@ -660,9 +662,12 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         //max16(maxColumn[i], vMaxColumn);
         //fprintf(stderr, "middle[%d]: %d\n", i, maxColumn[i]);
 
+        // Load the last column's last H value in each segment
         //__m128i vH = pvHStore[segLen - 1];
         __m128i vH = _mm_load_si128 (pvHStore + (segLen - 1));
+        // Shift it over (TODO: why??? We only shift this initial read and not later reads.)
         vH = _mm_slli_si128 (vH, 1); /* Shift the 128-bit value in vH left by 1 byte. */
+        // Find the profile entries for matching this column's ref base against each read base.
         __m128i* vP = vProfile + ref[i] * segLen; /* Right part of the vProfile */
 
         /* Swap the 2 H buffers. */
@@ -672,11 +677,15 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
 
         /* inner loop to process the query sequence */
         for (j = 0; LIKELY(j < segLen); ++j) {
+            // For each vector of cursor positions within this column
+            // at position j in each segment
 
+            // Add the profile scores for matching against this ref base
             vH = _mm_adds_epu8(vH, _mm_load_si128(vP + j));
-            vH = _mm_subs_epu8(vH, vBias); /* vH will be always > 0 */
-    //    max16(maxColumn[i], vH);
-    //    fprintf(stderr, "H[%d]: %d\n", i, maxColumn[i]);
+            // And subtract out the profile's bias (so profile scores can be <0)
+            vH = _mm_subs_epu8(vH, vBias); /* vH will be always > 0 because of saturation arithmetic */
+            //    max16(maxColumn[i], vH);
+            //    fprintf(stderr, "H[%d]: %d\n", i, maxColumn[i]);
             /*
             int8_t* t;
             int32_t ti;
@@ -684,14 +693,22 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             for (t = (int8_t*)&vH, ti = 0; ti < 16; ++ti) fprintf(stdout, "%d\t", *t++);
             fprintf(stdout, "\n");
             */
+            
+            // So now vH has the scores we would get if we did all matches/mismatches from the previous column.
+            // Next we are going to replace entries if we have a better score from a gap matrix.
 
             /* Get max from vH, vE and vF. */
             e = _mm_load_si128(pvE + j);
             //_mm_store_si128(vE + j, e);
+            
+            // So e holds the *current* column's read gap open/extend scores, which we computed on the *previous* column's pass.
+            // vF stores the *current* column's ref gap open/extend scores, but from the previous cursor position.
 
             vH = _mm_max_epu8(vH, e);
             vH = _mm_max_epu8(vH, vF);
             vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
+            
+            // So now vH has the correct (modulo wrong F values) H matrix entries.
 
             // max16(maxColumn[i], vMaxColumn);
             //fprintf(stdout, "middle[%d]: %d\n", i, maxColumn[i]);
@@ -706,16 +723,21 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             _mm_store_si128(pvEStore + j, e);
             _mm_store_si128(pvFStore + j, vF);
 
+            // Now we need to compute the E values for the *next* column, based
+            // on our non-F-loop-processed H values
+
             /* Update vE value. */
             vH = _mm_subs_epu8(vH, vGapO); /* saturation arithmetic, result >= 0 */
             e = _mm_subs_epu8(e, vGapE);
             e = _mm_max_epu8(e, vH);
 
+            // And we compute the next round of F values.
+
             /* Update vF value. */
             vF = _mm_subs_epu8(vF, vGapE);
             vF = _mm_max_epu8(vF, vH);
 
-            /* Save E */
+            /* Save the E values we computed for the next column */
             _mm_store_si128(pvE + j, e);
 
             /* Load the next vH. */
@@ -723,7 +745,6 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         }
 
 
-        /* Lazy_F loop: has been revised to disallow adjecent insertion and then deletion, so don't update E(i, j), learn from SWPS3 */
         /* reset pointers to the start of the saved data */
         j = 0;
         vH = _mm_load_si128 (pvHStore + j);
@@ -743,6 +764,20 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             vH = _mm_max_epu8 (vH, vF);
             vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
             _mm_store_si128 (pvHStore + j, vH);
+            
+            // Update the E matrix for the next column
+            // Since we may have changed the H matrix
+            // This is to allow a gap-to-gap transition in the alignment
+            e = _mm_load_si128(pvE + j);
+            // The H matrix can only get better, so the gap open scores can only
+            // get better, so the E matrix can only get better too.
+            vTemp = _mm_subs_epu8(vH, vGapO);
+            e = _mm_max_epu8(e, vTemp);
+            _mm_store_si128(pvE + j, e);
+            // TODO: Instead of doing this, would it be smarter to just compute
+            // the E matrix for each column when we're doing its H matrix? Or
+            // would the extra buffer slow us down more than the extra compute?
+            
 
             // Save the stripe of the F matrix
             // Only add in better F scores. Sometimes during this loop we'll
@@ -1388,7 +1423,6 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
     /* 16 byte insertion extension vector */
     __m128i vGapE = _mm_set1_epi16(weight_gapE);
 
-    /* 16 byte bias vector */
     __m128i vMaxScore = vZero; /* Trace the highest score of the whole SW matrix. */
     __m128i vMaxMark = vZero; /* Trace the highest score till the previous column. */
     __m128i vTemp;
@@ -1408,12 +1442,12 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
         __m128i vH = pvHStore[segLen - 1];
         vH = _mm_slli_si128 (vH, 2); /* Shift the 128-bit value in vH left by 2 byte. */
 
-        /* Swap the 2 H buffers. */
-        __m128i* pv = pvHLoad;
-
         __m128i vMaxColumn = vZero; /* vMaxColumn is used to record the max values of column i. */
 
         __m128i* vP = vProfile + ref[i] * segLen; /* Right part of the vProfile */
+        
+        /* Swap the 2 H buffers. */
+        __m128i* pv = pvHLoad;
         pvHLoad = pvHStore;
         pvHStore = pv;
 
@@ -1448,7 +1482,6 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
             vH = _mm_load_si128(pvHLoad + j);
         }
 
-        /* Lazy_F loop: has been revised to disallow adjecent insertion and then deletion, so don't update E(i, j), learn from SWPS3 */
         for (k = 0; LIKELY(k < 8); ++k) {
             vF = _mm_slli_si128 (vF, 2);
             for (j = 0; LIKELY(j < segLen); ++j) {
@@ -1456,6 +1489,13 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
                 vH = _mm_load_si128(pvHStore + j);
                 vH = _mm_max_epi16(vH, vF);
                 _mm_store_si128(pvHStore + j, vH);
+                
+                // Update the E matrix column for the next base, based on the
+                // new H values. E values can only go up.
+                vTemp = _mm_subs_epu16(vH, vGapO);
+                e = _mm_load_si128(pvE + j);
+                e = _mm_max_epi16(e, vTemp);
+                _mm_store_si128(pvE + j, e);
                 
                 // Save the stripe of the F matrix
                 // Only add in better F scores. Sometimes during this loop we'll

@@ -64,7 +64,10 @@ typedef struct gssw_profile gssw_profile;
 // matrix). F information is not carried over, because gaps in the reference
 // can't span multiple reference nodes.
 typedef struct {
+    // Stores the E values (best gap in read scores) for the *next* column to be
+    // generated, in the matrix to be filled. They are known in advance.
     __m128i* pvE;
+    // Stores the H values (overall best scores) from the previous column, before the matrix to be filled.
     __m128i* pvHStore;
 } gssw_seed;
 
