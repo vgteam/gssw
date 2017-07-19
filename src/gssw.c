@@ -701,8 +701,11 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             e = _mm_load_si128(pvE + j);
             //_mm_store_si128(vE + j, e);
             
-            // So e holds the *current* column's read gap open/extend scores, which we computed on the *previous* column's pass.
-            // vF stores the *current* column's ref gap open/extend scores, but from the previous cursor position.
+            // So e holds the *current* column's read gap open/extend scores,
+            // which we computed on the *previous* column's pass.
+            // vF stores the current column and *current* cursor position's ref
+            // gap open/extend scores, which we computed on the *previous*
+            // cursor position.
 
             vH = _mm_max_epu8(vH, e);
             vH = _mm_max_epu8(vH, vF);
@@ -731,11 +734,11 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             e = _mm_subs_epu8(e, vGapE);
             e = _mm_max_epu8(e, vH);
 
-            // And we compute the next round of F values.
+            // And we compute the F values for the next cursor position.
 
-            /* Update vF value. */
+            /* Compute new vF value, giving F matrix values at next cursor position */
             vF = _mm_subs_epu8(vF, vGapE);
-            vF = _mm_max_epu8(vF, vH);
+            vF = _mm_max_epu8(vF, vH); // We already charged a gap open against vH
 
             /* Save the E values we computed for the next column */
             _mm_store_si128(pvE + j, e);
@@ -749,17 +752,46 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         j = 0;
         vH = _mm_load_si128 (pvHStore + j);
 
-        /*  the computed vF value is for the given column.  since */
-        /*  we are at the end, we need to shift the vF value over */
-        /*  to the next column. */
+        /*  
+         * Wrap vF around from the end of each segment to the start of the next.
+         */
         vF = _mm_slli_si128 (vF, 1);
+        
+        // So now we're looking at the F value for every first position, after a
+        // full pass. So the first F is guaranteed to be right, and other Fs
+        // will be right if nothing had to propagate down more than 16 bases.
 
-        vTemp = _mm_subs_epu8 (vH, vGapO);
-        vTemp = _mm_subs_epu8 (vF, vTemp);
-        vTemp = _mm_cmpeq_epi8 (vTemp, vZero);
-        cmp  = _mm_movemask_epi8 (vTemp);
-        while (cmp != 0xffff)
+        // We're also looking at the H values that should be derived from those
+        // F values.
+        
+        vTemp = _mm_load_si128 (pvFStore + j);
+        int k;
+        for (k = 0; k < 16; k++) {
+            fprintf(stderr, "F: %hhu H: %hhu Old: %hhu\n", ((uint8_t*)&vF)[k], ((uint8_t*)&vH)[k], ((uint8_t*)&vTemp)[k]);
+        }
+  
+// See https://stackoverflow.com/q/33824300 for this unsigned comparison macro
+// for the missing unsigned comparison instruction
+#define _mm_cmpgt_epu8(v0, v1) \
+         _mm_cmpgt_epi8(_mm_xor_si128(v0, _mm_set1_epi8(-128)), \
+                        _mm_xor_si128(v1, _mm_set1_epi8(-128)))
+        
+        // Now we need to work out if we actually want to update anything. We
+        // need to do an F loop if we would modify H, or if we would improve
+        // over the old F.
+        
+        // If we beat the stored H
+        vTemp = _mm_cmpgt_epu8 (vF, vH);
+        cmp = _mm_movemask_epi8 (vTemp);
+        // Or we beat the stored F
+        vTemp = _mm_load_si128 (pvFStore + j);
+        vTemp = _mm_cmpgt_epu8 (vF, vTemp);
+        cmp |= _mm_movemask_epi8 (vTemp);
+        fprintf(stderr, "Start F loop? %hx\n", cmp);
+        while (cmp != 0x0000)
         {
+            // Then we do the update
+            
             // Update this stripe of the H matrix
             vH = _mm_max_epu8 (vH, vF);
             vMaxColumn = _mm_max_epu8(vMaxColumn, vH);
@@ -786,20 +818,29 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             vTemp = _mm_max_epu8 (vTemp, vF);
             _mm_store_si128(pvFStore + j, vTemp);
 
+            // Then think about extending
             vF = _mm_subs_epu8 (vF, vGapE);
 
             j++;
             if (j >= segLen)
             {
+                // Wrap around to the next segment again
                 j = 0;
                 vF = _mm_slli_si128 (vF, 1);
             }
 
+            // Again compute if H or F needs updating based on this new set of F
+            // values.
             vH = _mm_load_si128 (pvHStore + j);
-            vTemp = _mm_subs_epu8 (vH, vGapO);
-            vTemp = _mm_subs_epu8 (vF, vTemp);
-            vTemp = _mm_cmpeq_epi8 (vTemp, vZero);
-            cmp  = _mm_movemask_epi8 (vTemp);
+            
+            // See if we beat the stored H
+            vTemp = _mm_cmpgt_epu8 (vF, vH);
+            cmp = _mm_movemask_epi8 (vTemp);
+            // Or if we beat the stored F
+            vTemp = _mm_load_si128 (pvFStore + j);
+            vTemp = _mm_cmpgt_epu8 (vF, vTemp);
+            cmp |= _mm_movemask_epi8 (vTemp);
+            fprintf(stderr, "Continue F loop? %hx\n", cmp);
         }
 
         vMaxScore = _mm_max_epu8(vMaxScore, vMaxColumn);
