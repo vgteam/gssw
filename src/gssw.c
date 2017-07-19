@@ -764,12 +764,6 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         // We're also looking at the H values that should be derived from those
         // F values.
         
-        vTemp = _mm_load_si128 (pvFStore + j);
-        int k;
-        for (k = 0; k < 16; k++) {
-            fprintf(stderr, "F: %hhu H: %hhu Old: %hhu\n", ((uint8_t*)&vF)[k], ((uint8_t*)&vH)[k], ((uint8_t*)&vTemp)[k]);
-        }
-  
 // See https://stackoverflow.com/q/33824300 for this unsigned comparison macro
 // for the missing unsigned comparison instruction
 #define _mm_cmpgt_epu8(v0, v1) \
@@ -787,7 +781,6 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         vTemp = _mm_load_si128 (pvFStore + j);
         vTemp = _mm_cmpgt_epu8 (vF, vTemp);
         cmp |= _mm_movemask_epi8 (vTemp);
-        fprintf(stderr, "Start F loop? %hx\n", cmp);
         while (cmp != 0x0000)
         {
             // Then we do the update
@@ -840,7 +833,6 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
             vTemp = _mm_load_si128 (pvFStore + j);
             vTemp = _mm_cmpgt_epu8 (vF, vTemp);
             cmp |= _mm_movemask_epi8 (vTemp);
-            fprintf(stderr, "Continue F loop? %hx\n", cmp);
         }
 
         vMaxScore = _mm_max_epu8(vMaxScore, vMaxColumn);
@@ -1523,9 +1515,18 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
             vH = _mm_load_si128(pvHLoad + j);
         }
 
+        // Now we have the word-sized version of the lazy F loop, which is
+        // structured differently. We always do it at least once.
+
         for (k = 0; LIKELY(k < 8); ++k) {
+            // For each of the 8 segments we might have to propagate through
+        
+            // Wrap around the F values to the next segment
             vF = _mm_slli_si128 (vF, 2);
+            
             for (j = 0; LIKELY(j < segLen); ++j) {
+                // For each position in the segments
+            
                 // Update this stripe of the H matrix
                 vH = _mm_load_si128(pvHStore + j);
                 vH = _mm_max_epi16(vH, vF);
@@ -1545,9 +1546,19 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
                 vTemp = _mm_max_epi16 (vTemp, vF);
                 _mm_store_si128(pvFStore + j, vTemp);
                 
+                // Now compute the next F stripe's gap open scores
                 vH = _mm_subs_epu16(vH, vGapO);
+                // And its gap extend scores
                 vF = _mm_subs_epu16(vF, vGapE);
-                if (UNLIKELY(! _mm_movemask_epi8(_mm_cmpgt_epi16(vF, vH)))) goto end;
+                
+                if (UNLIKELY(! _mm_movemask_epi8(_mm_cmpgt_epi16(vF, vH)))) {
+                    // If it's not the case that any gap extend exceeds its gap open
+                
+                    // Break out of both the loops, because the F propagation is finished.
+                    goto end;
+                }
+                
+                // Otherwise, if any gap extend exceeds its gap open, we loop again.
             }
         }
 
