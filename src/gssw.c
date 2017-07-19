@@ -813,6 +813,9 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
 
             // Then think about extending
             vF = _mm_subs_epu8 (vF, vGapE);
+            // We never need to think about gap opens because nothing that came
+            // from a gap open can ever change, because you won't close and then
+            // immediately open a gap.
 
             j++;
             if (j >= segLen)
@@ -1448,7 +1451,7 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
     __m128i vZero = _mm_set1_epi32(0);
 
     /* Used for iteration */
-    int32_t i, j, k;
+    int32_t i, j;
 
     /* 16 byte insertion begin vector */
     __m128i vGapO = _mm_set1_epi16(weight_gapO);
@@ -1515,54 +1518,88 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
             vH = _mm_load_si128(pvHLoad + j);
         }
 
-        // Now we have the word-sized version of the lazy F loop, which is
-        // structured differently. We always do it at least once.
+        // Now we have the exact same lazy F loop as for bytes, but adapted.
+        // No more using two algorithms.
 
-        for (k = 0; LIKELY(k < 8); ++k) {
-            // For each of the 8 segments we might have to propagate through
+        /* reset pointers to the start of the saved data */
+        j = 0;
+        vH = _mm_load_si128 (pvHStore + j);
+
+        /*  
+         * Wrap vF around from the end of each segment to the start of the next.
+         */
+        vF = _mm_slli_si128 (vF, 2);
         
-            // Wrap around the F values to the next segment
-            vF = _mm_slli_si128 (vF, 2);
+        // Now we need to work out if we actually want to update anything. We
+        // need to do an F loop if we would modify H, or if we would improve
+        // over the old F.
+        
+        // If we beat the stored H
+        vTemp = _mm_cmpgt_epi16 (vF, vH);
+        cmp = _mm_movemask_epi8 (vTemp);
+        // Or we beat the stored F
+        vTemp = _mm_load_si128 (pvFStore + j);
+        vTemp = _mm_cmpgt_epi16 (vF, vTemp);
+        cmp |= _mm_movemask_epi8 (vTemp);
+        while (cmp != 0x0000)
+        {
+            // Then we do the update
             
-            for (j = 0; LIKELY(j < segLen); ++j) {
-                // For each position in the segments
+            // Update this stripe of the H matrix
+            vH = _mm_max_epi16 (vH, vF);
+            vMaxColumn = _mm_max_epi16(vMaxColumn, vH);
+            _mm_store_si128 (pvHStore + j, vH);
             
-                // Update this stripe of the H matrix
-                vH = _mm_load_si128(pvHStore + j);
-                vH = _mm_max_epi16(vH, vF);
-                _mm_store_si128(pvHStore + j, vH);
-                
-                // Update the E matrix column for the next base, based on the
-                // new H values. E values can only go up.
-                vTemp = _mm_subs_epu16(vH, vGapO);
-                e = _mm_load_si128(pvE + j);
-                e = _mm_max_epi16(e, vTemp);
-                _mm_store_si128(pvE + j, e);
-                
-                // Save the stripe of the F matrix
-                // Only add in better F scores. Sometimes during this loop we'll
-                // recompute worse ones.
-                vTemp = _mm_load_si128 (pvFStore + j);
-                vTemp = _mm_max_epi16 (vTemp, vF);
-                _mm_store_si128(pvFStore + j, vTemp);
-                
-                // Now compute the next F stripe's gap open scores
-                vH = _mm_subs_epu16(vH, vGapO);
-                // And its gap extend scores
-                vF = _mm_subs_epu16(vF, vGapE);
-                
-                if (UNLIKELY(! _mm_movemask_epi8(_mm_cmpgt_epi16(vF, vH)))) {
-                    // If it's not the case that any gap extend exceeds its gap open
-                
-                    // Break out of both the loops, because the F propagation is finished.
-                    goto end;
-                }
-                
-                // Otherwise, if any gap extend exceeds its gap open, we loop again.
+            // Update the E matrix for the next column
+            // Since we may have changed the H matrix
+            // This is to allow a gap-to-gap transition in the alignment
+            e = _mm_load_si128(pvE + j);
+            // The H matrix can only get better, so the gap open scores can only
+            // get better, so the E matrix can only get better too.
+            vTemp = _mm_subs_epu16(vH, vGapO);
+            e = _mm_max_epi16(e, vTemp);
+            _mm_store_si128(pvE + j, e);
+            // TODO: Instead of doing this, would it be smarter to just compute
+            // the E matrix for each column when we're doing its H matrix? Or
+            // would the extra buffer slow us down more than the extra compute?
+            
+
+            // Save the stripe of the F matrix
+            // Only add in better F scores. Sometimes during this loop we'll
+            // recompute worse ones.
+            vTemp = _mm_load_si128 (pvFStore + j);
+            vTemp = _mm_max_epi16 (vTemp, vF);
+            _mm_store_si128(pvFStore + j, vTemp);
+
+            // Then think about extending
+            vF = _mm_subs_epu16 (vF, vGapE);
+            // We never need to think about gap opens because nothing that came
+            // from a gap open can ever change, because you won't close and then
+            // immediately open a gap.
+
+            j++;
+            if (j >= segLen)
+            {
+                // Wrap around to the next segment again
+                j = 0;
+                vF = _mm_slli_si128 (vF, 2);
             }
+
+            // Again compute if H or F needs updating based on this new set of F
+            // values.
+            vH = _mm_load_si128 (pvHStore + j);
+            
+            // See if we beat the stored H
+            vTemp = _mm_cmpgt_epi16 (vF, vH);
+            cmp = _mm_movemask_epi8 (vTemp);
+            // Or if we beat the stored F
+            vTemp = _mm_load_si128 (pvFStore + j);
+            vTemp = _mm_cmpgt_epi16 (vF, vTemp);
+            cmp |= _mm_movemask_epi8 (vTemp);
         }
 
-end:
+        // Now H, E, and F are all up to date with downwards gap propagations.
+        
         vMaxScore = _mm_max_epi16(vMaxScore, vMaxColumn);
         vTemp = _mm_cmpeq_epi16(vMaxMark, vMaxScore);
         cmp = _mm_movemask_epi8(vTemp);
