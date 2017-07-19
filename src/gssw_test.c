@@ -33,6 +33,7 @@ int test_results() {
     if (tests_failed) {
         return 1;
     }
+    return 0;
 }
 
 // Has the current test failed?
