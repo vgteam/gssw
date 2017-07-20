@@ -1,5 +1,5 @@
 /*
- *  ssw.h
+ *  gssw.h
  *
  *  Created by Mengyao Zhao on 6/22/10.
  *  Copyright 2010 Boston College. All rights reserved.
@@ -40,7 +40,7 @@ typedef struct gssw_profile gssw_profile;
 // very best alignment using read characters through j and reference characters
 // through i, no matter what it ends in (match, mismatch, or gap). We also have
 // E[i, j] which gives the score of the best such alignment ending in a gap in
-// the read, and F[i, j], which give sthe score of the best such alignment
+// the read, and F[i, j], which gives the score of the best such alignment
 // ending in a gap in the reference.
 
 // During alignment, we work on one column (i.e. reference character) of all the
@@ -64,7 +64,10 @@ typedef struct gssw_profile gssw_profile;
 // matrix). F information is not carried over, because gaps in the reference
 // can't span multiple reference nodes.
 typedef struct {
+    // Stores the E values (best gap in read scores) for the *next* column to be
+    // generated, in the matrix to be filled. They are known in advance.
     __m128i* pvE;
+    // Stores the H values (overall best scores) from the previous column, before the matrix to be filled.
     __m128i* pvHStore;
 } gssw_seed;
 
@@ -759,7 +762,12 @@ void gssw_add_alignment(gssw_multi_align_stack* stack, gssw_alternate_alignment_
     
 /* Retuns the lowest score of an alternate alignment in the stack */
 int16_t gssw_min_alt_alignment_score(gssw_multi_align_stack* stack);
-    
+
+/* Turn on the SSE2 matrix filler (which is on by default) */    
+void gssw_sse2_enable();
+
+/* Turn off the SSE2 matrix filler and use a pure software implementation */
+void gssw_sse2_disable();
     
 #ifdef __cplusplus
 }

@@ -1,8 +1,8 @@
 /*	example.c
  *	This is a simple example to show you how to use the SSW C library.
  *	To run this example:
- *	1) gcc -Wall -lz ssw.c example.c
- *	2) ./a.out
+ *	1) make
+ *	2) bin/gssw_example GAT TT T ACA GATTACA
  *	Created by Mengyao Zhao on 07/31/12.
  */
 
@@ -25,6 +25,8 @@ int main (int argc, char * const argv[]) {
     char *ref_seq_3 = argv[3];
     char *ref_seq_4 = argv[4];
     char *read_seq = argv[5];
+
+    gssw_sse2_disable();
 
 	/* This table is used to transform nucleotide letters into numbers. */
     int8_t* nt_table = gssw_create_nt_table();
