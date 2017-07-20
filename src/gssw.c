@@ -46,7 +46,6 @@
 #include "gssw.h"
 
 //#define DEBUG_TRACEBACK
-//#define DEBUG_SOFTWARE_FILL
 
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
@@ -361,11 +360,12 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
     uint8_t* mE; // Gap in read best score
     uint8_t* mF; // Gap in ref best score
     // And buffers for matrix columns (unswizzled, but stored swizzled in the seeds)
+    // Note that, like the SSE2 code, we calculate the E matrix one column ahead.
     uint8_t* pvHStore; // Current column of the main (H) matrix
-    uint8_t* pvEStore; // Current column of the gap in read (E) matrix
+    uint8_t* pvEStore; // *Next* column of the gap in read (E) matrix
     uint8_t* pvFStore; // Current column of the gap in reference (F) matrix
     uint8_t* pvHLoad; // Previous column of the main (H) matrix
-    uint8_t* pvELoad; // Previous column of the gap in read (E) matrix
+    uint8_t* pvELoad; // *Current* column of the gap in read (E) matrix
     // No previous column needed for the gap in reference (F) martrix
     // But we do need a scratch pointer for swapping things
     uint8_t* pv;
@@ -399,7 +399,7 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
 
     /* if we are running a seeded alignment, copy over the seeds */
     if (seed) {
-        // Load the "current" bufers with the seed contents
+        // Load the bufers with the seed contents
         memcpy(pvEStore, seed->pvE, padded_read_length);
         memcpy(pvHStore, seed->pvHStore, padded_read_length);
         
@@ -430,7 +430,7 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
         // For each column i in the DP matrices (running in the appropriate direction)
         
         // We don't need the previous F column.
-        // But we do need to push the current H and E columns to the previous ones.
+        // But we do need to push the current H to the previous H and the next E to the current E.
         // We use a double buffering settup so we don't need to malloc and free and copy stuff.
         // By working with a previous and next column, we don't need to do anything fancy to support the flipable ref_dir.
         pv = pvHLoad;
@@ -444,10 +444,7 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
         for (j = 0; j < readLen; j++) {
             // For each row j in the DP matrices (running top to bottom)
             
-            // Set the gap-in-read matrix (E) based on previous E and previous H
-            uint8_t readGapOpenScore = subs_byte(pvHLoad[j], weight_gapO);
-            uint8_t readGapExtendScore = subs_byte(pvELoad[j], weight_gapE);
-            pvEStore[j] = max_byte(readGapOpenScore, readGapExtendScore);
+            // Gap in read (E) matrix for this column is already calculated.
             
             uint8_t refGapOpenScore = 0;
             uint8_t refGapExtendScore = 0;
@@ -478,16 +475,13 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
             matchScore = subs_byte(matchScore, bias);
             
             // Set the normal (H) matrix based on current E, current F, and match/mismatch score
-            pvHStore[j] = max_byte(max_byte(pvEStore[j], pvFStore[j]), matchScore);
+            pvHStore[j] = max_byte(max_byte(pvELoad[j], pvFStore[j]), matchScore);
             
-#ifdef DEBUG_SOFTWARE_FILL
-            // Dump the matrix as we fill it.
-            fprintf(stderr, "(%d, %d): Read O:%hhu E:%hhu Ref O:%hhu E:%hhu Match:%hhu+%hhu-%hhu=%hhu\n",
-                i, j,
-                readGapOpenScore, readGapExtendScore,
-                refGapOpenScore, refGapExtendScore,
-                matchFrom, profileScore, bias, matchScore);
-#endif
+            // Calculate the next E column
+            // Set the next gap-in-read matrix (E) based on current E and current H
+            uint8_t readGapOpenScore = subs_byte(pvHStore[j], weight_gapO);
+            uint8_t readGapExtendScore = subs_byte(pvELoad[j], weight_gapE);
+            pvEStore[j] = max_byte(readGapOpenScore, readGapExtendScore);
         
             // Set the running max
             if (pvHStore[j] > max) {
@@ -498,7 +492,7 @@ gssw_alignment_end* gssw_sw_software_byte (const int8_t* ref,
             
             // Copy from columns to matrices
             mH[i * readLen + j] = pvHStore[j];
-            mE[i * readLen + j] = pvEStore[j];
+            mE[i * readLen + j] = pvELoad[j];
             mF[i * readLen + j] = pvFStore[j];
         }
     }
@@ -1201,11 +1195,12 @@ gssw_alignment_end* gssw_sw_software_word (const int8_t* ref,
     int16_t* mE; // Gap in read best score
     int16_t* mF; // Gap in ref best score
     // And buffers for matrix columns (unswizzled, but stored swizzled in the seeds)
+    // Note that, like the SSE2 code, we calculate the E matrix one column ahead.
     int16_t* pvHStore; // Current column of the main (H) matrix
-    int16_t* pvEStore; // Current column of the gap in read (E) matrix
+    int16_t* pvEStore; // *Next* column of the gap in read (E) matrix
     int16_t* pvFStore; // Current column of the gap in reference (F) matrix
     int16_t* pvHLoad; // Previous column of the main (H) matrix
-    int16_t* pvELoad; // Previous column of the gap in read (E) matrix
+    int16_t* pvELoad; // *Current* column of the gap in read (E) matrix
     // No previous column needed for the gap in reference (F) martrix
     // But we do need a scratch pointer for swapping things
     int16_t* pv;
@@ -1239,7 +1234,7 @@ gssw_alignment_end* gssw_sw_software_word (const int8_t* ref,
 
     /* if we are running a seeded alignment, copy over the seeds */
     if (seed) {
-        // Load the "current" bufers with the seed contents
+        // Load the bufers with the seed contents
         memcpy(pvEStore, seed->pvE, padded_read_length * sizeof(int16_t));
         memcpy(pvHStore, seed->pvHStore, padded_read_length * sizeof(int16_t));
         
@@ -1269,7 +1264,7 @@ gssw_alignment_end* gssw_sw_software_word (const int8_t* ref,
         // For each column i in the DP matrices (running in the appropriate direction)
         
         // We don't need the previous F column.
-        // But we do need to push the current H and E columns to the previous ones.
+        // But we do need to push the current H to the previous H and the next E to the current E.
         // We use a double buffering settup so we don't need to malloc and free and copy stuff.
         // By working with a previous and next column, we don't need to do anything fancy to support the flipable ref_dir.
         pv = pvHLoad;
@@ -1283,12 +1278,7 @@ gssw_alignment_end* gssw_sw_software_word (const int8_t* ref,
         for (j = 0; j < readLen; j++) {
             // For each row j in the DP matrices (running top to bottom)
             
-            // Set the gap-in-read matrix (E) based on previous E and previous H
-            int16_t readGapOpenScore = subs_word(pvHLoad[j], weight_gapO);
-            int16_t readGapExtendScore = subs_word(pvELoad[j], weight_gapE);
-            pvEStore[j] = max_word(readGapOpenScore, readGapExtendScore);
-            // Nothing negative is allowed in score matrices
-            pvEStore[j] = max_word(pvEStore[j], 0);
+            // Gap in read (E) matrix is already set for this column
             
             int16_t refGapOpenScore = 0;
             int16_t refGapExtendScore = 0;
@@ -1320,18 +1310,16 @@ gssw_alignment_end* gssw_sw_software_word (const int8_t* ref,
             // We're working 16 bit with signed profile words)
             
             // Set the normal (H) matrix based on current E, current F, and match/mismatch score
-            pvHStore[j] = max_word(max_word(pvEStore[j], pvFStore[j]), matchScore);
+            pvHStore[j] = max_word(max_word(pvELoad[j], pvFStore[j]), matchScore);
             // Nothing negative is allowed in score matrices
             pvHStore[j] = max_word(pvHStore[j], 0);
 
-#ifdef DEBUG_SOFTWARE_FILL
-            // Dump the matrix as we fill it.
-            fprintf(stderr, "(%d, %d): Read O:%hd E:%hd Ref O:%hd E:%hd Match:%hd+%hd=%hd\n",
-                i, j,
-                readGapOpenScore, readGapExtendScore,
-                refGapOpenScore, refGapExtendScore,
-                matchFrom, profileScore, matchScore);
-#endif
+            // Set the next gap-in-read matrix (E) based on current E and current H
+            int16_t readGapOpenScore = subs_word(pvHStore[j], weight_gapO);
+            int16_t readGapExtendScore = subs_word(pvELoad[j], weight_gapE);
+            pvEStore[j] = max_word(readGapOpenScore, readGapExtendScore);
+            // Nothing negative is allowed in score matrices
+            pvEStore[j] = max_word(pvEStore[j], 0);
         
             // Set the running max
             if (pvHStore[j] > max) {
@@ -1342,7 +1330,7 @@ gssw_alignment_end* gssw_sw_software_word (const int8_t* ref,
             
             // Copy from columns to matrices
             mH[i * readLen + j] = pvHStore[j];
-            mE[i * readLen + j] = pvEStore[j];
+            mE[i * readLen + j] = pvELoad[j];
             mF[i * readLen + j] = pvFStore[j];
         }
     }
