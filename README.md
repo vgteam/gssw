@@ -2,6 +2,8 @@
 # *GSSW (a string to graph aligner)*
 ## An *Graph* SIMD Smith-Waterman C/C++ Library for Use in Genomic Applications
 
+[![Build Status](https://www.travis-ci.org/vgteam/gssw.svg?branch=master)](https://www.travis-ci.org/vgteam/gssw)
+
 ### Authors: Erik Garrison, Adam Novak, Jordan Eizenga, Mengyao Zhao
 
 ## Overview
