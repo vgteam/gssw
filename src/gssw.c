@@ -2211,6 +2211,11 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                     }
                 }
                 else {
+                    if (next_deflxn->to_node != node) {
+                        // This is a deflection from match to match, but it crosses a node boundary
+                        // so we leave the deflection in place and exit to the POA traceback
+                        break;
+                    }
                     switch (next_deflxn->to_matrix) {
                         case Match:
 #ifdef DEBUG_TRACEBACK
@@ -2715,6 +2720,35 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                     scoreHere = next_score_here;
                     continue;
                 }
+                else if (i == 0) {
+                    // We didn't check the alternate tracebacks that cross the node boundary
+                    // from the match matrix, and now we're entering the read gap matrix, so we
+                    // need to check these alternate tracebacks now because the POA function will
+                    // not know that we were at the node boundary in the match matrix
+                    
+                    int k;
+                    for (k = 0; k < node->count_prev; k++) {
+                        gssw_node* prev_node = node->prev[k];
+                        source_score = ((uint8_t*) prev_node->alignment->mH)[readLen * (prev_node->len-1) + i - 1];
+                        score_diff = scoreHere - source_score;
+                        
+                        if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
+                                     score_diff < alignment_deflections->score &&
+                                     source_score > 0)) {
+                            // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
+                            // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
+                            uint16_t alt_score = alignment_deflections->score - score_diff;
+#ifdef DEBUG_TRACEBACK
+                            fprintf(stderr, "Considering alternate alignment across node boundary match -> match with score %d vs current minimum %d and size %d of capacity %d\n", alt_score, gssw_min_alt_alignment_score(alt_alignment_stack), alt_alignment_stack->current_size, alt_alignment_stack->capacity);
+#endif
+                            if (alt_score > gssw_min_alt_alignment_score(alt_alignment_stack)
+                                || alt_alignment_stack->current_size < alt_alignment_stack->capacity) {
+                                gssw_add_alignment(alt_alignment_stack, alignment_deflections, alt_score,
+                                                   j, i, node, prev_node, Match, Match);
+                            }
+                        }
+                    }
+                }
             }
             else {
                 if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
@@ -2942,6 +2976,11 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                     }
                 }
                 else {
+                    if (next_deflxn->to_node != node) {
+                        // This is a deflection from match to match, but it crosses a node boundary
+                        // so we leave the deflection in place and exit to the POA traceback
+                        break;
+                    }
                     switch (next_deflxn->to_matrix) {
                         case Match:
 #ifdef DEBUG_TRACEBACK
@@ -3446,6 +3485,35 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                     scoreHere = next_score_here;
                     continue;
                 }
+                else if (i == 0) {
+                    // We didn't check the alternate tracebacks that cross the node boundary
+                    // from the match matrix, and now we're entering the read gap matrix, so we
+                    // need to check these alternate tracebacks now because the POA function will
+                    // not know that we were at the node boundary in the match matrix
+                    
+                    int k;
+                    for (k = 0; k < node->count_prev; k++) {
+                        gssw_node* prev_node = node->prev[k];
+                        source_score = ((uint16_t*) prev_node->alignment->mH)[readLen * (prev_node->len-1) + i - 1];
+                        score_diff = scoreHere - source_score;
+                        
+                        if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
+                                     score_diff < alignment_deflections->score &&
+                                     source_score > 0)) {
+                            // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
+                            // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
+                            uint16_t alt_score = alignment_deflections->score - score_diff;
+#ifdef DEBUG_TRACEBACK
+                            fprintf(stderr, "Considering alternate alignment across node boundary match -> match with score %d vs current minimum %d and size %d of capacity %d\n", alt_score, gssw_min_alt_alignment_score(alt_alignment_stack), alt_alignment_stack->current_size, alt_alignment_stack->capacity);
+#endif
+                            if (alt_score > gssw_min_alt_alignment_score(alt_alignment_stack)
+                                || alt_alignment_stack->current_size < alt_alignment_stack->capacity) {
+                                gssw_add_alignment(alt_alignment_stack, alignment_deflections, alt_score,
+                                                   j, i, node, prev_node, Match, Match);
+                            }
+                        }
+                    }
+                }
             }
             else {
                 if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
@@ -3671,7 +3739,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
     null_suffix.score = 0;
     null_suffix.num_deflections = 0;
     null_suffix.deflections = NULL;
-    gssw_add_alignment(alt_alignment_stack, &null_suffix, score, readEnd, refEnd, NULL, n, Match, Match);
+    gssw_add_alignment(alt_alignment_stack, &null_suffix, score, readEnd, refEnd, n, n, Match, Match);
     
     // Iterate through alternate alignments in descending order of score
     int32_t traceback_idx;
@@ -3749,6 +3817,15 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
         
 #ifdef DEBUG_TRACEBACK
         fprintf(stderr, "new trace back, starting node = %p %u\n", n, n->id);
+        fprintf(stderr, "score %d, deflections (%d, %p):\n", alt_alignment->score, alt_alignment->num_deflections, alt_alignment->deflections);
+        int v;
+        for (v = 0; v < alt_alignment->num_deflections; v++) {
+            gssw_trace_back_deflection deflxn = alt_alignment->deflections[v];
+            fprintf(stderr, "\t(n:%d, %c[%d,%d]) -> (n:%d, %c)\n", deflxn.from_node->id,
+                    deflxn.from_matrix == Match ? 'H' : deflxn.from_matrix == ReadGap ? 'E' : 'F',
+                    deflxn.ref_pos, deflxn.read_pos, deflxn.to_node->id,
+                    deflxn.to_matrix == Match ? 'H' : deflxn.to_matrix == ReadGap ? 'E' : 'F');
+        }
 #endif
         while (score > 0) {
             // Until we've accounted for all the score
@@ -3929,9 +4006,6 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                     // marks whether we've found the next cell in traceback
                     int32_t found_trace = 0;
                     
-                    // We need this to check whether a gap was closed here (then we need to check additional alternate alignments)
-                    uint8_t gapClosedScore = ((uint8_t*) n->alignment->mH)[readLen * refEnd + readEnd];
-                    
                     // store the next traceback in these so that we can avoid updating variables until end of loop
                     uint16_t next_score = score;
                     int32_t next_read_end = readEnd;
@@ -4067,30 +4141,6 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
 #ifdef DEBUG_TRACEBACK
                             fprintf(stderr, "Comparing gap open across nodes: score here %d, penalty %d, source score %d\n", score, gap_open, gapOpenSourceScore);
 #endif
-                            // Did we arrive at this boundary by from a gap that had just closed?
-                            if (score == gapClosedScore) {
-                                // we need to check the match to match alternate alignments that should have been checked
-                                // in the node alignment function but were not because the previous nodes were not available there
-                                
-                                uint16_t score_diff = score - (diagonalSourceScore + align_score);
-                                
-#ifdef DEBUG_TRACEBACK
-                                fprintf(stderr, "Gap was closed in this cell, checking alternate matches across node boundary\n");
-                                fprintf(stderr, "score here %d, diagonal match score %d, align score %d, score diff %d\n", score, diagonalSourceScore, align_score, score_diff);
-#endif
-                                if (UNLIKELY(deflection_idx == alt_alignment->num_deflections &&
-                                             score_diff < alt_alignment->score &&
-                                             diagonalSourceScore > 0)) {
-                                    // score is suboptimal or we have already chosen an optimal trace
-                                    uint16_t alt_score = alt_alignment->score - score_diff;
-                                    
-                                    if (alt_score > gssw_min_alt_alignment_score(alt_alignment_stack)
-                                        || alt_alignment_stack->current_size < alt_alignment_stack->capacity) {
-                                        gssw_add_alignment(alt_alignment_stack, alt_alignment, alt_score,
-                                                           readEnd, refEnd, n, cn, Match, Match);
-                                    }
-                                }
-                            }
                             
                             // If we are in a gap, it would have been a last resort in the node's traceback.
                             uint16_t score_diff = score - (gapOpenSourceScore - gap_open);
@@ -4265,9 +4315,6 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                     // marks whether we've found the next cell in traceback
                     int32_t found_trace = 0;
                     
-                    // We need this to check whether a gap was closed here (then we need to check additional alternate alignments)
-                    uint16_t gapClosedScore = ((uint16_t*) n->alignment->mH)[readLen * refEnd + readEnd];
-                    
                     // store the next traceback in these so that we can avoid updating variables until end of loop
                     uint16_t next_score = score;
                     int32_t next_read_end = readEnd;
@@ -4402,30 +4449,6 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
 #ifdef DEBUG_TRACEBACK
                             fprintf(stderr, "Comparing gap open across nodes: score here %d, penalty %d, source score %d\n", score, gap_open, gapOpenSourceScore);
 #endif
-                            // Did we arrive at this boundary by from a gap that had just closed?
-                            if (score == gapClosedScore) {
-                                // we need to check the match to match alternate alignments that should have been checked
-                                // in the node alignment function but were not because the previous nodes were not available there
-                                
-                                uint16_t score_diff = score - (diagonalSourceScore + align_score);
-                                
-#ifdef DEBUG_TRACEBACK
-                                fprintf(stderr, "Gap was closed in this cell, checking alternate matches across node boundary\n");
-                                fprintf(stderr, "score here %d, diagonal match score %d, align score %d, score diff %d\n", score, diagonalSourceScore, align_score, score_diff);
-#endif
-                                if (UNLIKELY(deflection_idx == alt_alignment->num_deflections &&
-                                             score_diff < alt_alignment->score &&
-                                             diagonalSourceScore > 0)) {
-                                    // score is suboptimal or we have already chosen an optimal trace
-                                    uint16_t alt_score = alt_alignment->score - score_diff;
-                                    
-                                    if (alt_score > gssw_min_alt_alignment_score(alt_alignment_stack)
-                                        || alt_alignment_stack->current_size < alt_alignment_stack->capacity) {
-                                        gssw_add_alignment(alt_alignment_stack, alt_alignment, alt_score,
-                                                           readEnd, refEnd, n, cn, Match, Match);
-                                    }
-                                }
-                            }
                             
                             // If we are in a gap, it would have been a last resort in the node's traceback.
                             uint16_t score_diff = score - (gapOpenSourceScore - gap_open);
