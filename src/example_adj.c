@@ -96,7 +96,6 @@ int main (int argc, char * const argv[]) {
     gssw_graph_mapping_destroy(gm);
     
     gssw_graph_mapping* gmp = gssw_graph_trace_back_pinned_qual_adj (graph,
-                                                                     nodes[3],
                                                                      read_seq,
                                                                      read_qual,
                                                                      strlen(read_seq),
@@ -112,8 +111,8 @@ int main (int argc, char * const argv[]) {
     
     int num_alts = 30;
     gssw_graph_mapping** gmps = gssw_graph_trace_back_pinned_qual_adj_multi (graph,
-                                                                             nodes[3],
                                                                              num_alts,
+                                                                             1,
                                                                              read_seq,
                                                                              read_qual,
                                                                              strlen(read_seq),

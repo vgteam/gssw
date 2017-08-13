@@ -1977,6 +1977,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_node* node,
                                        gssw_alternate_alignment_ends* alignment_deflections,
                                        int32_t* deflection_idx,
                                        int32_t final_traceback,
+                                       int32_t find_internal_node_alts,
                                        uint16_t* score,
                                        int32_t* refEnd,
                                        int32_t* readEnd,
@@ -1999,6 +2000,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_node* node,
                                               alignment_deflections,
                                               deflection_idx,
                                               final_traceback,
+                                              find_internal_node_alts,
                                               score,
                                               refEnd,
                                               readEnd,
@@ -2021,6 +2023,7 @@ gssw_cigar* gssw_alignment_trace_back (gssw_node* node,
                                               alignment_deflections,
                                               deflection_idx,
                                               final_traceback,
+                                              find_internal_node_alts,
                                               score,
                                               refEnd,
                                               readEnd,
@@ -2045,6 +2048,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                                             gssw_alternate_alignment_ends* alignment_deflections,
                                             int32_t* deflection_idx,
                                             int32_t final_traceback,
+                                            int32_t find_internal_node_alts,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
@@ -2321,7 +2325,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -2361,7 +2365,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -2431,7 +2435,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -2470,7 +2474,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -2584,7 +2588,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -2645,7 +2649,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  score_diff == 0)) {
+                                  score_diff == 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     // also this alignment is only valid as a start if the implicit source score is 0
@@ -2684,7 +2688,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -2753,7 +2757,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
             else {
                 if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                              score_diff < alignment_deflections->score &&
-                             source_score > 0)) {
+                             source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -2810,6 +2814,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                                             gssw_alternate_alignment_ends* alignment_deflections,
                                             int32_t* deflection_idx,
                                             int32_t final_traceback,
+                                            int32_t find_internal_node_alts,
                                             uint16_t* score,
                                             int32_t* refEnd,
                                             int32_t* readEnd,
@@ -3086,7 +3091,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -3126,7 +3131,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -3196,7 +3201,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -3235,7 +3240,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -3349,7 +3354,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -3410,7 +3415,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  score_diff == 0)) {
+                                  score_diff == 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     // also this alignment is only valid as a start if the implicit source score is 0
@@ -3449,7 +3454,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                 }
                 else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                   score_diff < alignment_deflections->score &&
-                                  source_score > 0)) {
+                                  source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -3499,7 +3504,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                         
                         if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                      score_diff < alignment_deflections->score &&
-                                     source_score > 0)) {
+                                     source_score > 0 && find_internal_node_alts)) {
                             // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                             // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                             uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -3518,7 +3523,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
             else {
                 if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                              score_diff < alignment_deflections->score &&
-                             source_score > 0)) {
+                             source_score > 0 && find_internal_node_alts)) {
                     // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                     // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                     uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -3656,8 +3661,9 @@ void gssw_reverse_graph_cigar(gssw_graph_cigar* c) {
 // for local alignment then we need to seed the multi-alignment stack with the top k end points before entering
 // the inner loop
 gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
-                                                     gssw_node* pinned_node,
+                                                     int32_t pin_at_sinks,
                                                      int32_t num_tracebacks,
+                                                     int32_t find_internal_node_alts,
                                                      const char* read,
                                                      const char* qual,
                                                      int32_t readLen,
@@ -3688,14 +3694,8 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
     
     gssw_multi_align_stack* alt_alignment_stack = gssw_new_multi_align_stack(num_tracebacks);
     
-    // Start traceback from pinned node or from maximum scoring node
-    gssw_node* n;
-    if (pinned_node) {
-        n = pinned_node;
-    }
-    else {
-        n = graph->max_node;
-    }
+    // Check that alignment has been run and find highest scoring node
+    gssw_node* n = graph->max_node;;
     
     if (!n) {
         fprintf(stderr, "error:[gssw] Cannot trace back because graph alignment has not been run.\n");
@@ -3706,22 +3706,41 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
     // Are we using bytes, or did we have to do shorts?
     uint8_t score_is_byte = gssw_is_byte(n->alignment);
     
+    // Create a null suffix to prefix the alignment starts with
+    gssw_alternate_alignment_ends null_suffix;
+    null_suffix.score = 0;
+    null_suffix.num_deflections = 0;
+    null_suffix.deflections = NULL;
+    
     int32_t refEnd;
     int32_t readEnd;
     uint16_t score;
-    if (pinned_node) {
-        // Get the coordinates of the score
-        refEnd = n->len - 1;
-        readEnd = readLen - 1;
+    if (pin_at_sinks) {
+        // Initialize the alternate alignment stack with each sink node
         
-        // Get the score in the bottom right corner
-        if (score_is_byte) {
-            uint8_t* mH = (uint8_t*) n->alignment->mH;
-            score = mH[readLen * refEnd + readEnd];
-        }
-        else {
-            uint16_t* mH = (uint16_t*) n->alignment->mH;
-            score = mH[readLen * refEnd + readEnd];
+        int j;
+        for (j = 0; j < graph->size; j++) {
+            n = graph->nodes[j];
+            // Is it a sink?
+            if (n->count_next == 0) {
+                // Get the coordinates of the score
+                refEnd = n->len - 1;
+                readEnd = readLen - 1;
+                
+                // Get the score in the bottom right corner
+                if (score_is_byte) {
+                    uint8_t* mH = (uint8_t*) n->alignment->mH;
+                    score = mH[readLen * refEnd + readEnd];
+                }
+                else {
+                    uint16_t* mH = (uint16_t*) n->alignment->mH;
+                    score = mH[readLen * refEnd + readEnd];
+                }
+                
+                // Add it to the alt alignment stack and let internal logic decide which ones
+                // to keep
+                gssw_add_alignment(alt_alignment_stack, &null_suffix, score, readEnd, refEnd, n, n, Match, Match);
+            }
         }
     }
     else {
@@ -3732,14 +3751,9 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
         
         // Get the best score at the node
         score = n->alignment->score1;
+        
+        gssw_add_alignment(alt_alignment_stack, &null_suffix, score, readEnd, refEnd, n, n, Match, Match);
     }
-    
-    // Initialize the alternate alignment stack with primary alignment
-    gssw_alternate_alignment_ends null_suffix;
-    null_suffix.score = 0;
-    null_suffix.num_deflections = 0;
-    null_suffix.deflections = NULL;
-    gssw_add_alignment(alt_alignment_stack, &null_suffix, score, readEnd, refEnd, n, n, Match, Match);
     
     // Iterate through alternate alignments in descending order of score
     int32_t traceback_idx;
@@ -3845,6 +3859,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                                                    alt_alignment,
                                                    &deflection_idx,
                                                    final_traceback,
+                                                   find_internal_node_alts,
                                                    &score,
                                                    &refEnd,
                                                    &readEnd,
@@ -4605,8 +4620,9 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                            int8_t end_full_length_bonus) {
     
     gssw_graph_mapping** gms = gssw_graph_trace_back_internal(graph,
-                                                              NULL,
+                                                              0,
                                                               1,
+                                                              0,
                                                               read,
                                                               NULL,
                                                               readLen,
@@ -4633,8 +4649,9 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
                                                     int8_t end_full_length_bonus) {
 
     gssw_graph_mapping** gms = gssw_graph_trace_back_internal(graph,
-                                                              NULL,
+                                                              0,
                                                               1,
+                                                              0,
                                                               read,
                                                               qual,
                                                               readLen,
@@ -4650,7 +4667,6 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
 }
 
 gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
-                                                  gssw_node* pinned_node,
                                                   const char* read,
                                                   int32_t readLen,
                                                   int8_t* nt_table,
@@ -4661,8 +4677,9 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
                                                   int8_t end_full_length_bonus) {
 
     gssw_graph_mapping** gms = gssw_graph_trace_back_internal(graph,
-                                                              pinned_node,
                                                               1,
+                                                              1,
+                                                              0,
                                                               read,
                                                               NULL,
                                                               readLen,
@@ -4678,7 +4695,6 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
 }
 
 gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
-                                                           gssw_node* pinned_node,
                                                            const char* read,
                                                            const char* qual,
                                                            int32_t readLen,
@@ -4690,8 +4706,9 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
                                                            int8_t end_full_length_bonus) {
     
     gssw_graph_mapping** gms = gssw_graph_trace_back_internal(graph,
-                                                              pinned_node,
                                                               1,
+                                                              1,
+                                                              0,
                                                               read,
                                                               qual,
                                                               readLen,
@@ -4707,8 +4724,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
 }
 
 gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
-                                                         gssw_node* pinned_node,
                                                          int32_t num_tracebacks,
+                                                         int32_t find_internal_node_alts,
                                                          const char* read,
                                                          int32_t readLen,
                                                          int8_t* nt_table,
@@ -4719,8 +4736,9 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
                                                          int8_t end_full_length_bonus) {
     
     return gssw_graph_trace_back_internal(graph,
-                                          pinned_node,
+                                          1,
                                           num_tracebacks,
+                                          find_internal_node_alts,
                                           read,
                                           NULL,
                                           readLen,
@@ -4733,8 +4751,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
 }
 
 gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* graph,
-                                                                  gssw_node* pinned_node,
                                                                   int32_t num_tracebacks,
+                                                                  int32_t find_internal_node_alts,
                                                                   const char* read,
                                                                   const char* qual,
                                                                   int32_t readLen,
@@ -4745,8 +4763,9 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* gr
                                                                   int8_t start_full_length_bonus,
                                                                   int8_t end_full_length_bonus) {
     return gssw_graph_trace_back_internal(graph,
-                                          pinned_node,
+                                          1,
                                           num_tracebacks,
+                                          find_internal_node_alts,
                                           read,
                                           qual,
                                           readLen,
