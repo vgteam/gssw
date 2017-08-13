@@ -77,7 +77,6 @@ int main (int argc, char * const argv[]) {
     
     
     gssw_graph_mapping* gmp = gssw_graph_trace_back_pinned (graph,
-                                                            nodes[3],
                                                             read_seq,
                                                             strlen(read_seq),
                                                             nt_table,
@@ -92,8 +91,8 @@ int main (int argc, char * const argv[]) {
     
     int num_alts = 15;
     gssw_graph_mapping** gmps = gssw_graph_trace_back_pinned_multi (graph,
-                                                                    nodes[3],
                                                                     num_alts,
+                                                                    1,
                                                                     read_seq,
                                                                     strlen(read_seq),
                                                                     nt_table,
