@@ -79,7 +79,7 @@ int main (int argc, char * const argv[]) {
     gssw_graph_add_node(graph, nodes[2]);
     gssw_graph_add_node(graph, nodes[3]);
     
-    gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, adj_mat, gap_open, gap_extension, 0, 0, 15, 2);
+    gssw_graph_fill_qual_adj(graph, read_seq, read_qual, nt_table, adj_mat, gap_open, gap_extension, 0, 0, 15, 2, true);
     gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
     gssw_graph_mapping* gm = gssw_graph_trace_back_qual_adj (graph,
                                                              read_seq,

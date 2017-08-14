@@ -60,7 +60,7 @@ int main (int argc, char * const argv[]) {
     gssw_graph_add_node(graph, nodes[2]);
     gssw_graph_add_node(graph, nodes[3]);
     
-    gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 0, 0, 15, 2);
+    gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 0, 0, 15, 2, true);
     gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
     gssw_graph_mapping* gm = gssw_graph_trace_back (graph,
                                                     read_seq,
@@ -111,7 +111,7 @@ int main (int argc, char * const argv[]) {
 
     free(gmps);
     
-    gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 10, 10, 15, 2);
+    gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 10, 10, 15, 2, true);
     gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);
     gm = gssw_graph_trace_back (graph,
                                 read_seq,

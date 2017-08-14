@@ -338,7 +338,8 @@ gssw_align* gssw_ssw_align (const gssw_profile* prof,
                             const uint8_t flag,
                             const uint16_t filters,
                             const int32_t filterd,
-                            const int32_t maskLen);
+                            const int32_t maskLen,
+                            bool score_only);
 
 // @function	ssw fill.
 /*!	@function	Do Striped Smith-Waterman alignment, but do not generate cigar.  Only return best score, filled matrix, and last E vector.
@@ -373,13 +374,14 @@ gssw_align* gssw_ssw_align (const gssw_profile* prof,
 			while bit 8 is not, the function will return cigar only when both criteria are fulfilled. All returned positions are
 			0-based coordinate.
 */
-gssw_align* gssw_ssw_fill (const gssw_profile* prof,
-                           const int8_t* ref,
-                           const int32_t refLen,
-                           const uint8_t weight_gapO,
-                           const uint8_t weight_gapE,
-                           const int32_t maskLen,
-                           gssw_seed* seed);
+gssw_align* gssw_fill (const gssw_profile* prof,
+                       const int8_t* ref,
+                       const int32_t refLen,
+                       const uint8_t weight_gapO,
+                       const uint8_t weight_gapE,
+                       const int32_t maskLen,
+                       bool score_only,
+                       gssw_seed* seed);
 
 
 /*!	@function	Release the memory allocated by function ssw_align.
@@ -600,6 +602,7 @@ gssw_node_fill (gssw_node* node,
                 const uint8_t weight_gapO,
                 const uint8_t weight_gapE,
                 const int32_t maskLen,
+                bool save_matrixes,
                 const gssw_seed* seed);
 
 gssw_graph*
@@ -612,7 +615,8 @@ gssw_graph_fill (gssw_graph* graph,
                  const int8_t start_full_length_bonus,
                  const int8_t end_full_length_bonus,
                  const int32_t maskLen,
-                 const int8_t score_size);
+                 const int8_t score_size,
+                 bool save_matrixes);
 
 gssw_graph*
 gssw_graph_fill_qual_adj(gssw_graph* graph,
@@ -625,7 +629,8 @@ gssw_graph_fill_qual_adj(gssw_graph* graph,
                          const int8_t start_full_length_bonus,
                          const int8_t end_full_length_bonus,
                          const int32_t maskLen,
-                         const int8_t score_size);
+                         const int8_t score_size,
+                         bool save_matrixes);
     
 gssw_graph*
 gssw_graph_fill_pinned (gssw_graph* graph,
@@ -637,7 +642,8 @@ gssw_graph_fill_pinned (gssw_graph* graph,
                         const int8_t start_full_length_bonus,
                         const int8_t end_full_length_bonus,
                         const int32_t maskLen,
-                        const int8_t score_size);
+                        const int8_t score_size,
+                        bool save_matrixes);
 
 gssw_graph*
 gssw_graph_fill_pinned_qual_adj(gssw_graph* graph,
@@ -650,7 +656,8 @@ gssw_graph_fill_pinned_qual_adj(gssw_graph* graph,
                                 const int8_t start_full_length_bonus,
                                 const int8_t end_full_length_bonus,
                                 const int32_t maskLen,
-                                const int8_t score_size);
+                                const int8_t score_size,
+                                bool save_matrixes);
     
 gssw_graph* gssw_graph_create(uint32_t size);
 int32_t gssw_graph_add_node(gssw_graph* graph,
