@@ -2078,8 +2078,6 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
     int32_t i = *refEnd;
     int32_t j = *readEnd;
     
-    fprintf(stderr, "at entering node traceback, ref end = %d, read end = %d\n", i, j);
-    
     // These let us know if we're currently supposed to be in a gap, waiting for
     // the gap open that ought to open it.
     int32_t gRead = *readGapFlag; // If set we're in E actually
