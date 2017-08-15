@@ -2733,7 +2733,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                     int k;
                     for (k = 0; k < node->count_prev; k++) {
                         gssw_node* prev_node = node->prev[k];
-                        source_score = ((uint8_t*) prev_node->alignment->mH)[readLen * (prev_node->len-1) + i - 1];
+                        source_score = ((uint8_t*) prev_node->alignment->mH)[readLen * (prev_node->len - 1) + j - 1];
                         score_diff = scoreHere - source_score;
                         
                         if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
@@ -3499,12 +3499,12 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                     int k;
                     for (k = 0; k < node->count_prev; k++) {
                         gssw_node* prev_node = node->prev[k];
-                        source_score = ((uint16_t*) prev_node->alignment->mH)[readLen * (prev_node->len-1) + i - 1];
+                        source_score = ((uint16_t*) prev_node->alignment->mH)[readLen * (prev_node->len - 1) + j - 1];
                         score_diff = scoreHere - source_score;
                         
                         if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
                                      score_diff < alignment_deflections->score &&
-                                     source_score > 0 && find_internal_node_alts)) {
+                                     source_score > 0)) {
                             // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
                             // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
                             uint16_t alt_score = alignment_deflections->score - score_diff;
@@ -4011,6 +4011,9 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                                     break;
                             }
                         }
+#ifdef DEBUG_TRACEBACK
+                        fprintf(stderr, "Score at deflected position is %d\n", score);
+#endif
                         deflection_idx++;
                     }
                 }
@@ -4595,6 +4598,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
         
 #ifdef DEBUG_TRACEBACK
         fprintf(stderr, "at end of traceback loop\n");
+        gssw_print_graph_mapping(gm, stderr);
 #endif
         gssw_reverse_graph_cigar(gc);
         
@@ -5921,7 +5925,7 @@ void gssw_add_alignment(gssw_multi_align_stack* stack, gssw_alternate_alignment_
         }
     }
 #ifdef DEBUG_TRACEBACK
-    fprintf(stderr, "###\n###finished updating alignment stack, scores are now: ");
+    fprintf(stderr, "finished updating alignment stack, scores are now: ");
     if (stack->top_scoring) {
         gssw_multi_align_stack_node* n = stack->top_scoring;
         fprintf(stderr, "%d", n->alt_alignment->score);
