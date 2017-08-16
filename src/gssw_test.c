@@ -174,7 +174,7 @@ gssw_graph* align_strings(char* const ref, char* const read, uint8_t scoreSize) 
     gssw_graph* graph = gssw_graph_create(1);
     gssw_graph_add_node(graph, node);
     
-    gssw_graph_fill(graph, read, nt_table, mat, gap_open, gap_extension, 0, 0, 15, scoreSize);
+    gssw_graph_fill(graph, read, nt_table, mat, gap_open, gap_extension, 0, 0, 15, scoreSize, true);
 
     // Free the translation table
     free(nt_table);
@@ -224,7 +224,7 @@ gssw_graph* align_diamond(char* const start, char* const alt1, char* const alt2,
     gssw_graph_add_node(graph, nodes[2]);
     gssw_graph_add_node(graph, nodes[3]);
     
-    gssw_graph_fill(graph, read, nt_table, mat, gap_open, gap_extension, 0, 0, 15, scoreSize);
+    gssw_graph_fill(graph, read, nt_table, mat, gap_open, gap_extension, 0, 0, 15, scoreSize, true);
 
     // Free the translation table
     free(nt_table);

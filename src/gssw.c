@@ -565,6 +565,7 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
                                        uint8_t bias,  /* Shift 0 point to a positive value. */
                                        int32_t maskLen,
                                        gssw_align* alignment, /* to save seed and matrix */
+                                       bool save_matrixes,  /* don't save the H, E, and F matrixes */
                                        const gssw_seed* seed) {     /* to seed the alignment */
 
     uint8_t max = 0;                             /* the max alignment score */
@@ -580,9 +581,9 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
     // We have a couple extra arrays for logging columns
     __m128i* pvEStore;
     __m128i* pvFStore;
-    uint8_t* mH; // used to save matrices for external traceback: overall best score
-    uint8_t* mE; // Gap in read best score
-    uint8_t* mF; // Gap in ref best score
+    uint8_t* mH = NULL; // used to save matrices for external traceback: overall best score
+    uint8_t* mE = NULL; // Gap in read best score
+    uint8_t* mF = NULL; // Gap in ref best score
     /* Note use of aligned memory.  Return value of 0 means success for posix_memalign. */
     if (!(!posix_memalign((void**)&pvHStore,     sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&pvHLoad,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
@@ -591,11 +592,15 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
           !posix_memalign((void**)&pvEStore,     sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&pvFStore,     sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&alignment->seed.pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
-          !posix_memalign((void**)&alignment->seed.pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)) &&
-          !posix_memalign((void**)&mH,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)) &&
-          !posix_memalign((void**)&mE,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)) &&
-          !posix_memalign((void**)&mF,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)))) {
+          !posix_memalign((void**)&alignment->seed.pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
         fprintf(stderr, "error:[gssw] Could not allocate memory required for alignment buffers.\n");
+        exit(1);
+    }
+
+    if (save_matrixes && !(!posix_memalign((void**)&mH,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)) &&
+                           !posix_memalign((void**)&mE,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)) &&
+                           !posix_memalign((void**)&mF,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)))) {
+        fprintf(stderr, "error:[gssw] Could not allocate memory required for alignment traceback matrixes.\n");
         exit(1);
     }
 
@@ -608,9 +613,11 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
     memset(pvFStore,                 0, segLen*sizeof(__m128i));
     memset(alignment->seed.pvE,      0, segLen*sizeof(__m128i));
     memset(alignment->seed.pvHStore, 0, segLen*sizeof(__m128i));
-    memset(mH,                       0, segLen*refLen*sizeof(__m128i));
-    memset(mE,                       0, segLen*refLen*sizeof(__m128i));
-    memset(mF,                       0, segLen*refLen*sizeof(__m128i));
+    if (save_matrixes) {
+        memset(mH,                       0, segLen*refLen*sizeof(__m128i));
+        memset(mE,                       0, segLen*refLen*sizeof(__m128i));
+        memset(mF,                       0, segLen*refLen*sizeof(__m128i));
+    }
 
     /* if we are running a seeded alignment, copy over the seeds */
     if (seed) {
@@ -619,9 +626,11 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
     }
 
     /* Set external matrix pointers */
-    alignment->mH = mH;
-    alignment->mE = mE;
-    alignment->mF = mF;
+    if (save_matrixes) {
+        alignment->mH = mH;
+        alignment->mE = mE;
+        alignment->mF = mF;
+    }
 
     /* Record that we have done a byte-order alignment */
     alignment->is_byte = 1;
@@ -855,46 +864,46 @@ gssw_alignment_end* gssw_sw_sse2_byte (const int8_t* ref,
         // save the current column for traceback
         // Need to unswizzle all the stripes
 
-
-        // Save H
-        //fprintf(stdout, "%i %i\n", i, j);
-        for (j = 0; LIKELY(j < segLen); ++j) {
-            uint8_t* t;
-            int32_t ti;
-            vTemp = pvHStore[j];
-            for (t = (uint8_t*)&vTemp, ti = 0; ti < 16; ++ti) {
-                //fprintf(stderr, "%d\t", *t);
-                ((uint8_t*)mH)[i*readLen + ti*segLen + j] = *t++;
+        if (save_matrixes) {
+            // Save H
+            //fprintf(stdout, "%i %i\n", i, j);
+            for (j = 0; LIKELY(j < segLen); ++j) {
+                uint8_t* t;
+                int32_t ti;
+                vTemp = pvHStore[j];
+                for (t = (uint8_t*)&vTemp, ti = 0; ti < 16; ++ti) {
+                    //fprintf(stderr, "%d\t", *t);
+                    ((uint8_t*)mH)[i*readLen + ti*segLen + j] = *t++;
+                }
+                //fprintf(stderr, "\n");
             }
-            //fprintf(stderr, "\n");
-        }
         
-        // Save E
-        //fprintf(stdout, "%i %i\n", i, j);
-        for (j = 0; LIKELY(j < segLen); ++j) {
-            uint8_t* t;
-            int32_t ti;
-            vTemp = pvEStore[j];
-            for (t = (uint8_t*)&vTemp, ti = 0; ti < 16; ++ti) {
-                //fprintf(stderr, "%d\t", *t);
-                ((uint8_t*)mE)[i*readLen + ti*segLen + j] = *t++;
+            // Save E
+            //fprintf(stdout, "%i %i\n", i, j);
+            for (j = 0; LIKELY(j < segLen); ++j) {
+                uint8_t* t;
+                int32_t ti;
+                vTemp = pvEStore[j];
+                for (t = (uint8_t*)&vTemp, ti = 0; ti < 16; ++ti) {
+                    //fprintf(stderr, "%d\t", *t);
+                    ((uint8_t*)mE)[i*readLen + ti*segLen + j] = *t++;
+                }
+                //fprintf(stderr, "\n");
             }
-            //fprintf(stderr, "\n");
-        }
         
-        // Save F
-        //fprintf(stdout, "%i %i\n", i, j);
-        for (j = 0; LIKELY(j < segLen); ++j) {
-            uint8_t* t;
-            int32_t ti;
-            vTemp = pvFStore[j];
-            for (t = (uint8_t*)&vTemp, ti = 0; ti < 16; ++ti) {
-                //fprintf(stderr, "%d\t", *t);
-                ((uint8_t*)mF)[i*readLen + ti*segLen + j] = *t++;
+            // Save F
+            //fprintf(stdout, "%i %i\n", i, j);
+            for (j = 0; LIKELY(j < segLen); ++j) {
+                uint8_t* t;
+                int32_t ti;
+                vTemp = pvFStore[j];
+                for (t = (uint8_t*)&vTemp, ti = 0; ti < 16; ++ti) {
+                    //fprintf(stderr, "%d\t", *t);
+                    ((uint8_t*)mF)[i*readLen + ti*segLen + j] = *t++;
+                }
+                //fprintf(stderr, "\n");
             }
-            //fprintf(stderr, "\n");
         }
-
 
         /* Record the max score of current column. */
         //max16(maxColumn[i], vMaxColumn);
@@ -1372,6 +1381,7 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
                                        uint16_t terminate,
                                        int32_t maskLen,
                                        gssw_align* alignment, /* to save seed and matrix */
+                                       bool save_matrixes,  /* don't save the H, E, and F matrixes */
                                        const gssw_seed* seed) {     /* to seed the alignment */
     
 
@@ -1388,9 +1398,9 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
     // We have a couple extra arrays for logging columns
     __m128i* pvEStore;
     __m128i* pvFStore;
-    uint16_t* mH; // used to save matrices for external traceback: overall best
-    uint16_t* mE; // Read gap
-    uint16_t* mF; // Ref gap
+    uint16_t* mH = NULL; // used to save matrices for external traceback: overall best
+    uint16_t* mE = NULL; // Read gap
+    uint16_t* mF = NULL; // Ref gap
     /* Note use of aligned memory */
 
     if (!(!posix_memalign((void**)&pvHStore,     sizeof(__m128i), segLen*sizeof(__m128i)) &&
@@ -1400,11 +1410,15 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
           !posix_memalign((void**)&pvEStore,     sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&pvFStore,     sizeof(__m128i), segLen*sizeof(__m128i)) &&
           !posix_memalign((void**)&alignment->seed.pvE,      sizeof(__m128i), segLen*sizeof(__m128i)) &&
-          !posix_memalign((void**)&alignment->seed.pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)) &&
-          !posix_memalign((void**)&mH,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)) &&
-          !posix_memalign((void**)&mE,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)) &&
-          !posix_memalign((void**)&mF,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)))) {
+          !posix_memalign((void**)&alignment->seed.pvHStore, sizeof(__m128i), segLen*sizeof(__m128i)))) {
         fprintf(stderr, "error:[gssw] Could not allocate memory required for alignment buffers.\n");
+        exit(1);
+    }
+
+    if (save_matrixes && !(!posix_memalign((void**)&mH,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)) &&
+                           !posix_memalign((void**)&mE,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)) &&
+                           !posix_memalign((void**)&mF,           sizeof(__m128i), segLen*refLen*sizeof(__m128i)))) {
+        fprintf(stderr, "error:[gssw] Could not allocate memory required for alignment traceback matrixes.\n");
         exit(1);
     }
 
@@ -1417,9 +1431,11 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
     memset(pvFStore,                 0, segLen*sizeof(__m128i));
     memset(alignment->seed.pvE,      0, segLen*sizeof(__m128i));
     memset(alignment->seed.pvHStore, 0, segLen*sizeof(__m128i));
-    memset(mH,                       0, segLen*refLen*sizeof(__m128i));
-    memset(mE,                       0, segLen*refLen*sizeof(__m128i));
-    memset(mF,                       0, segLen*refLen*sizeof(__m128i));
+    if (save_matrixes) {
+        memset(mH,                       0, segLen*refLen*sizeof(__m128i));
+        memset(mE,                       0, segLen*refLen*sizeof(__m128i));
+        memset(mF,                       0, segLen*refLen*sizeof(__m128i));
+    }
 
     /* if we are running a seeded alignment, copy over the seeds */
     if (seed) {
@@ -1428,9 +1444,11 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
     }
 
     /* Set external matrix pointers */
-    alignment->mH = mH;
-    alignment->mE = mE;
-    alignment->mF = mF;
+    if (save_matrixes) {
+        alignment->mH = mH;
+        alignment->mE = mE;
+        alignment->mF = mF;
+    }
 
     /* Record that we have done a word-order alignment */
     alignment->is_byte = 0;
@@ -1605,45 +1623,45 @@ gssw_alignment_end* gssw_sw_sse2_word (const int8_t* ref,
         }
 
         /* save current column */
+        if (save_matrixes) {
+            // Do the un-swizzling of the stripes.
         
-        // Do the un-swizzling of the stripes.
-        
-        // H matrix
-        for (j = 0; LIKELY(j < segLen); ++j) {
-            uint16_t* t;
-            int32_t ti;
-            vTemp = pvHStore[j];
-            for (t = (uint16_t*)&vTemp, ti = 0; ti < 8; ++ti) {
-                //fprintf(stdout, "%d\t", *t++);
-                ((uint16_t*)mH)[i*readLen + ti*segLen + j] = *t++;
+            // H matrix
+            for (j = 0; LIKELY(j < segLen); ++j) {
+                uint16_t* t;
+                int32_t ti;
+                vTemp = pvHStore[j];
+                for (t = (uint16_t*)&vTemp, ti = 0; ti < 8; ++ti) {
+                    //fprintf(stdout, "%d\t", *t++);
+                    ((uint16_t*)mH)[i*readLen + ti*segLen + j] = *t++;
+                }
+                //fprintf(stdout, "\n");
             }
-            //fprintf(stdout, "\n");
-        }
         
-        // E matrix
-        for (j = 0; LIKELY(j < segLen); ++j) {
-            uint16_t* t;
-            int32_t ti;
-            vTemp = pvEStore[j];
-            for (t = (uint16_t*)&vTemp, ti = 0; ti < 8; ++ti) {
-                //fprintf(stdout, "%d\t", *t++);
-                ((uint16_t*)mE)[i*readLen + ti*segLen + j] = *t++;
+            // E matrix
+            for (j = 0; LIKELY(j < segLen); ++j) {
+                uint16_t* t;
+                int32_t ti;
+                vTemp = pvEStore[j];
+                for (t = (uint16_t*)&vTemp, ti = 0; ti < 8; ++ti) {
+                    //fprintf(stdout, "%d\t", *t++);
+                    ((uint16_t*)mE)[i*readLen + ti*segLen + j] = *t++;
+                }
+                //fprintf(stdout, "\n");
             }
-            //fprintf(stdout, "\n");
-        }
         
-        // F matrix
-        for (j = 0; LIKELY(j < segLen); ++j) {
-            uint16_t* t;
-            int32_t ti;
-            vTemp = pvFStore[j];
-            for (t = (uint16_t*)&vTemp, ti = 0; ti < 8; ++ti) {
-                //fprintf(stdout, "%d\t", *t++);
-                ((uint16_t*)mF)[i*readLen + ti*segLen + j] = *t++;
+            // F matrix
+            for (j = 0; LIKELY(j < segLen); ++j) {
+                uint16_t* t;
+                int32_t ti;
+                vTemp = pvFStore[j];
+                for (t = (uint16_t*)&vTemp, ti = 0; ti < 8; ++ti) {
+                    //fprintf(stdout, "%d\t", *t++);
+                    ((uint16_t*)mF)[i*readLen + ti*segLen + j] = *t++;
+                }
+                //fprintf(stdout, "\n");
             }
-            //fprintf(stdout, "\n");
-        }
-        
+        }        
 
         /* Record the max score of current column. */
         //max8(maxColumn[i], vMaxColumn);
@@ -1774,6 +1792,7 @@ gssw_align* gssw_fill (const gssw_profile* prof,
                        const uint8_t weight_gapO,
                        const uint8_t weight_gapE,
                        const int32_t maskLen,
+                       bool save_matrixes,
                        gssw_seed* seed) {
 
     gssw_alignment_end* bests = 0;
@@ -1791,7 +1810,7 @@ gssw_align* gssw_fill (const gssw_profile* prof,
         if (gssw_sse2_enabled) {
             // Use SSE2
             bests = gssw_sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE,
-                                      prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
+                                      prof->profile_byte, -1, prof->bias, maskLen, alignment, save_matrixes, seed);
         } else {
             // Use software
             bests = gssw_sw_software_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE,
@@ -1804,7 +1823,7 @@ gssw_align* gssw_fill (const gssw_profile* prof,
             if (gssw_sse2_enabled) {
                 // Use SSE2
                 bests = gssw_sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen,
-                                          alignment, seed);
+                                          alignment, save_matrixes, seed);
             } else {
                 // Use software
                 bests = gssw_sw_software_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, maskLen,
@@ -1818,7 +1837,7 @@ gssw_align* gssw_fill (const gssw_profile* prof,
         if (gssw_sse2_enabled) {
             // Use SSE2
             bests = gssw_sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
-                                      alignment, seed);
+                                      alignment, save_matrixes, seed);
         } else {
             // Use software
             bests = gssw_sw_software_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen,
@@ -5085,7 +5104,8 @@ gssw_graph_fill_internal (gssw_graph* graph,
                           const int8_t start_full_length_bonus,
                           const int8_t end_full_length_bonus,
                           const int32_t maskLen,
-                          const int8_t score_size) {
+                          const int8_t score_size,
+                          bool save_matrixes) {
     int32_t read_length = strlen(read_seq);
     int8_t* read_num = gssw_create_num(read_seq, read_length, nt_table);
     int8_t* qual_num = gssw_create_qual_num(read_qual, read_length);
@@ -5111,7 +5131,7 @@ gssw_graph_fill_internal (gssw_graph* graph,
             } else {
                 seed = gssw_create_seed_word(prof->readLen, n->prev, n->count_prev);
             }
-            gssw_node* filled_node = gssw_node_fill(n, prof, weight_gapO, weight_gapE, maskLen, seed);
+            gssw_node* filled_node = gssw_node_fill(n, prof, weight_gapO, weight_gapE, maskLen, save_matrixes, seed);
             gssw_seed_destroy(seed); seed = NULL; // cleanup seed
             // test if we have exceeded the score dynamic range
             if (prof->profile_byte && !filled_node) {
@@ -5123,10 +5143,10 @@ gssw_graph_fill_internal (gssw_graph* graph,
                 if (read_qual) {
                     return gssw_graph_fill_pinned_qual_adj(graph, read_seq, read_qual, nt_table, score_matrix, weight_gapO,
                                                            weight_gapE, start_full_length_bonus, end_full_length_bonus,
-                                                           maskLen, 1);
+                                                           maskLen, 1, save_matrixes);
                 } else {
                     return gssw_graph_fill_pinned(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE,
-                                                  start_full_length_bonus, end_full_length_bonus, maskLen, 1);
+                                                  start_full_length_bonus, end_full_length_bonus, maskLen, 1, save_matrixes);
                 }
             } else {
                 if (!graph->max_node || n->alignment->score1 > max_score) {
@@ -5148,7 +5168,7 @@ gssw_graph_fill_internal (gssw_graph* graph,
             } else {
                 seed = gssw_create_seed_word(prof->readLen, n->prev, n->count_prev);
             }
-            gssw_node* filled_node = gssw_node_fill(n, prof, weight_gapO, weight_gapE, maskLen, seed);
+            gssw_node* filled_node = gssw_node_fill(n, prof, weight_gapO, weight_gapE, maskLen, save_matrixes, seed);
             gssw_seed_destroy(seed); seed = NULL; // cleanup seed
             // test if we have exceeded the score dynamic range
             if (prof->profile_byte && !filled_node) {
@@ -5160,10 +5180,10 @@ gssw_graph_fill_internal (gssw_graph* graph,
                 if (read_qual) {
                     return gssw_graph_fill_pinned_qual_adj(graph, read_seq, read_qual, nt_table, score_matrix, weight_gapO,
                                                            weight_gapE, start_full_length_bonus, end_full_length_bonus,
-                                                           maskLen, 1);
+                                                           maskLen, 1, save_matrixes);
                 } else {
                     return gssw_graph_fill_pinned(graph, read_seq, nt_table, score_matrix, weight_gapO, weight_gapE,
-                                                  start_full_length_bonus, end_full_length_bonus, maskLen, 1);
+                                                  start_full_length_bonus, end_full_length_bonus, maskLen, 1, save_matrixes);
                 }
             } else {
                 if (!graph->max_node || n->alignment->score1 > max_score) {
@@ -5192,11 +5212,12 @@ gssw_graph_fill (gssw_graph* graph,
                  const int8_t start_full_length_bonus,
                  const int8_t end_full_length_bonus,
                  const int32_t maskLen,
-                 const int8_t score_size) {
+                 const int8_t score_size,
+                 bool save_matrixes) {
     
     return gssw_graph_fill_internal(graph, read_seq, NULL, nt_table, score_matrix,
                                     weight_gapO, weight_gapE, start_full_length_bonus,
-                                    end_full_length_bonus, maskLen, score_size);
+                                    end_full_length_bonus, maskLen, score_size, save_matrixes);
 }
 
 
@@ -5212,11 +5233,12 @@ gssw_graph_fill_qual_adj(gssw_graph* graph,
                          const int8_t start_full_length_bonus,
                          const int8_t end_full_length_bonus,
                          const int32_t maskLen,
-                         const int8_t score_size) {
+                         const int8_t score_size,
+                         bool save_matrixes) {
 
     return gssw_graph_fill_internal(graph, read_seq, read_qual, nt_table, adj_score_matrix,
                                     weight_gapO, weight_gapE, start_full_length_bonus,
-                                    end_full_length_bonus, maskLen, score_size);
+                                    end_full_length_bonus, maskLen, score_size, save_matrixes);
 }
 
 
@@ -5230,14 +5252,15 @@ gssw_graph_fill_pinned (gssw_graph* graph,
                         const int8_t start_full_length_bonus,
                         const int8_t end_full_length_bonus,
                         const int32_t maskLen,
-                        const int8_t score_size) {
+                        const int8_t score_size,
+                        bool save_matrixes) {
                         
     // TODO: now that we have full length bonuses for unpinned alignment, this
     // doesn't do anything different than the unpinned version...
     
     return gssw_graph_fill_internal(graph, read_seq, NULL, nt_table, score_matrix,
                                     weight_gapO, weight_gapE, start_full_length_bonus,
-                                    end_full_length_bonus, maskLen, score_size);
+                                    end_full_length_bonus, maskLen, score_size, save_matrixes);
 }
 
 gssw_graph*
@@ -5251,11 +5274,12 @@ gssw_graph_fill_pinned_qual_adj(gssw_graph* graph,
                                 const int8_t start_full_length_bonus,
                                 const int8_t end_full_length_bonus,
                                 const int32_t maskLen,
-                                const int8_t score_size) {
+                                const int8_t score_size,
+                                bool save_matrixes) {
     
     return gssw_graph_fill_internal(graph, read_seq, read_qual, nt_table, adj_score_matrix,
                                     weight_gapO, weight_gapE, start_full_length_bonus,
-                                    end_full_length_bonus, maskLen, score_size);
+                                    end_full_length_bonus, maskLen, score_size, save_matrixes);
 }
 
 
@@ -5265,6 +5289,7 @@ gssw_node_fill (gssw_node* node,
                 const uint8_t weight_gapO,
                 const uint8_t weight_gapE,
                 const int32_t maskLen,
+                bool save_matrixes,
                 const gssw_seed* seed) {
 
     gssw_alignment_end* bests = NULL;
@@ -5295,7 +5320,7 @@ gssw_node_fill (gssw_node* node,
         
         if (gssw_sse2_enabled) {
             // Use SSE2
-            bests = gssw_sw_sse2_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
+            bests = gssw_sw_sse2_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, save_matrixes, seed);
         } else {
             // Use pure software
             bests = gssw_sw_software_byte((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen, alignment, seed);
@@ -5308,7 +5333,7 @@ gssw_node_fill (gssw_node* node,
     } else if (prof->profile_word) {
         if (gssw_sse2_enabled) {
             // Use SSE2
-            bests = gssw_sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen, alignment, seed);
+            bests = gssw_sw_sse2_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen, alignment, save_matrixes, seed);
         } else {
             // Use software
             bests = gssw_sw_software_word((const int8_t*)node->num, 0, node->len, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen, alignment, seed);
