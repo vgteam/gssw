@@ -260,6 +260,7 @@ void swizzle_byte(uint8_t* to_swizzle, int32_t size) {
         }
         
     }
+   free(scratch);
 }
 
 /**
@@ -290,6 +291,7 @@ void unswizzle_byte(uint8_t* to_unswizzle, int32_t size) {
         // And save it to the right place in the unswizzled vector.
         to_unswizzle[i] = scratch[(i % segLen) * 16 + (i / segLen)];
     }
+   free(scratch);
 }
 
 /**
