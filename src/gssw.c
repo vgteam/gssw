@@ -1,6 +1,6 @@
 /* The MIT License
 
-   Copyright (c) 2012-2015 Boston College.
+   Copyright (c) 2012-2015 Boston College, 2014-2018 Wellcome Sanger Institute
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -23,17 +23,11 @@
    SOFTWARE.
 */
 
-/* Contact: Mengyao Zhao <zhangmp@bc.edu> */
-/* Contact: Erik Garrison <erik.garrison@bc.edu> */
+/* Contact: Erik Garrison <erik.garrison@gmail.com> */
 
 /*
- *  ssw.c
- *
  *  Created by Mengyao Zhao on 6/22/10.
- *  Copyright 2010 Boston College. All rights reserved.
- *    Version 0.1.4
- *    Last revision by Erik Garrison 01/02/2014
- *
+ *  Generalized to operate on graphs by Erik Garrison and renamed gssw.c
  */
 #include <emmintrin.h>
 #include <stdint.h>
