@@ -504,10 +504,12 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
                                                     int8_t end_full_length_bonus);
 
 // Computes the traceback ending with the final character of the read aligned to the final character
-// of a given node
+// of any of a set of given nodes (which is taken to be allå sink nodes if no set is provided)
 gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
                                                   const char* read,
                                                   int32_t readLen,
+                                                  gssw_node** pinning_nodes,
+                                                  int32_t num_pinning_nodes,
                                                   int8_t* nt_table,
                                                   int8_t* score_matrix,
                                                   uint8_t gap_open,
@@ -519,6 +521,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
                                                            const char* read,
                                                            const char* qual,
                                                            int32_t readLen,
+                                                           gssw_node** pinning_nodes,
+                                                           int32_t num_pinning_nodes,
                                                            int8_t* nt_table,
                                                            int8_t* adj_score_matrix,
                                                            uint8_t gap_open,
@@ -527,12 +531,15 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
                                                            int8_t end_full_length_bonus);
 
 // Computes an arbitrary number of highest scoring tracebacks ending with the final character of the
-// read aligned to the final character of a given node
+// read aligned to the final character of of any of a set of given nodes (which is taken to be all
+// sink nodes if no set is provided)
 gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
                                                          int32_t num_tracebacks,
                                                          int32_t find_internal_node_alts,
                                                          const char* read,
                                                          int32_t readLen,
+                                                         gssw_node** pinning_nodes,
+                                                         int32_t num_pinning_nodes,
                                                          int8_t* nt_table,
                                                          int8_t* score_matrix,
                                                          uint8_t gap_open,
@@ -546,6 +553,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* gr
                                                                   const char* read,
                                                                   const char* qual,
                                                                   int32_t readLen,
+                                                                  gssw_node** pinning_nodes,
+                                                                  int32_t num_pinning_nodes,
                                                                   int8_t* nt_table,
                                                                   int8_t* adj_score_matrix,
                                                                   uint8_t gap_open,

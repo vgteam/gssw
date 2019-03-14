@@ -14,6 +14,12 @@
 
 //	Align a pair of genome sequences.
 int main (int argc, char * const argv[]) {
+    
+    if (argc != 6) {
+        fprintf(stderr, "usage: gssw_example nodeseq1 nodeseq2 nodeseq3 nodeseq4 readseq\n");
+        exit(1);
+    }
+    
     // default parameters for genome sequence alignment
     int8_t match = 1, mismatch = 4;
     uint8_t gap_open = 6, gap_extension = 1;
@@ -41,10 +47,10 @@ int main (int argc, char * const argv[]) {
     int8_t* mat = gssw_create_score_matrix(match, mismatch);
 
     gssw_node* nodes[4];
-    nodes[0] = (gssw_node*)gssw_node_create("A", 1, ref_seq_1, nt_table, mat);
-    nodes[1] = (gssw_node*)gssw_node_create("B", 2, ref_seq_2, nt_table, mat);
-    nodes[2] = (gssw_node*)gssw_node_create("C", 3, ref_seq_3, nt_table, mat);
-    nodes[3] = (gssw_node*)gssw_node_create("D", 4, ref_seq_4, nt_table, mat);
+    nodes[0] = (gssw_node*)gssw_node_create(NULL, 1, ref_seq_1, nt_table, mat);
+    nodes[1] = (gssw_node*)gssw_node_create(NULL, 2, ref_seq_2, nt_table, mat);
+    nodes[2] = (gssw_node*)gssw_node_create(NULL, 3, ref_seq_3, nt_table, mat);
+    nodes[3] = (gssw_node*)gssw_node_create(NULL, 4, ref_seq_4, nt_table, mat);
     
     // makes a diamond
     gssw_nodes_add_edge(nodes[0], nodes[1]);
@@ -76,9 +82,14 @@ int main (int argc, char * const argv[]) {
     gssw_graph_mapping_destroy(gm);
     
     
+    gssw_node** pinning_nodes = (gssw_node**) malloc(sizeof(gssw_node*));
+    pinning_nodes[0] = nodes[3];
+    
     gssw_graph_mapping* gmp = gssw_graph_trace_back_pinned (graph,
                                                             read_seq,
                                                             strlen(read_seq),
+                                                            pinning_nodes,
+                                                            1,
                                                             nt_table,
                                                             mat,
                                                             gap_open,
@@ -90,11 +101,14 @@ int main (int argc, char * const argv[]) {
     gssw_graph_mapping_destroy(gmp);
     
     int num_alts = 15;
+    
     gssw_graph_mapping** gmps = gssw_graph_trace_back_pinned_multi (graph,
                                                                     num_alts,
                                                                     1,
                                                                     read_seq,
                                                                     strlen(read_seq),
+                                                                    pinning_nodes,
+                                                                    1,
                                                                     nt_table,
                                                                     mat,
                                                                     gap_open,
@@ -109,6 +123,7 @@ int main (int argc, char * const argv[]) {
     }
 
     free(gmps);
+    free(pinning_nodes);
     
     gssw_graph_fill(graph, read_seq, nt_table, mat, gap_open, gap_extension, 10, 10, 15, 2, true);
     gssw_graph_print_score_matrices(graph, read_seq, strlen(read_seq), stdout);

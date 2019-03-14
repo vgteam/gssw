@@ -3676,12 +3676,14 @@ void gssw_reverse_graph_cigar(gssw_graph_cigar* c) {
 // for local alignment then we need to seed the multi-alignment stack with the top k end points before entering
 // the inner loop
 gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
-                                                     int32_t pin_at_sinks,
+                                                     int32_t doing_pinning,
                                                      int32_t num_tracebacks,
                                                      int32_t find_internal_node_alts,
                                                      const char* read,
                                                      const char* qual,
                                                      int32_t readLen,
+                                                     gssw_node** pinning_nodes,
+                                                     int32_t num_pinning_nodes,
                                                      int8_t* nt_table,
                                                      int8_t* score_matrix,
                                                      uint8_t gap_open,
@@ -3730,8 +3732,36 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
     int32_t refEnd;
     int32_t readEnd;
     uint16_t score;
-    if (pin_at_sinks) {
-        // Initialize the alternate alignment stack with each sink node
+    if (num_pinning_nodes) {
+        // Initialize the alternate alignment stack with the set of provided
+        // pinning nodes
+
+        int j;
+        for (j = 0; j < num_pinning_nodes; j++) {
+            gssw_node* n = pinning_nodes[j];
+            // Get the coordinates of the score
+            refEnd = n->len - 1;
+            readEnd = readLen - 1;
+
+            // Get the score in the bottom right corner
+            if (score_is_byte) {
+                uint8_t* mH = (uint8_t*) n->alignment->mH;
+                score = mH[readLen * refEnd + readEnd];
+            }
+            else {
+                uint16_t* mH = (uint16_t*) n->alignment->mH;
+                score = mH[readLen * refEnd + readEnd];
+            }
+
+            // Add it to the alt alignment stack and let internal logic decide which ones
+            // to keep
+            gssw_add_alignment(alt_alignment_stack, &null_suffix, score, readEnd, refEnd, n, n, Match, Match);
+        }
+    }
+    else if (doing_pinning) {
+        // Initialize the alternate alignment stack with each sink node since
+        // no other pinning node set was provided but we have indicated that we
+        // are in fact doing pinned alignment anyway
         
         int j;
         for (j = 0; j < graph->size; j++) {
@@ -4645,6 +4675,8 @@ gssw_graph_mapping* gssw_graph_trace_back (gssw_graph* graph,
                                                               read,
                                                               NULL,
                                                               readLen,
+                                                              NULL,
+                                                              0,
                                                               nt_table,
                                                               score_matrix,
                                                               gap_open,
@@ -4674,6 +4706,8 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
                                                               read,
                                                               qual,
                                                               readLen,
+                                                              NULL,
+                                                              0,
                                                               nt_table,
                                                               adj_score_matrix,
                                                               gap_open,
@@ -4688,6 +4722,8 @@ gssw_graph_mapping* gssw_graph_trace_back_qual_adj (gssw_graph* graph,
 gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
                                                   const char* read,
                                                   int32_t readLen,
+                                                  gssw_node** pinning_nodes,
+                                                  int32_t num_pinning_nodes,
                                                   int8_t* nt_table,
                                                   int8_t* score_matrix,
                                                   uint8_t gap_open,
@@ -4702,6 +4738,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned (gssw_graph* graph,
                                                               read,
                                                               NULL,
                                                               readLen,
+                                                              pinning_nodes,
+                                                              num_pinning_nodes,
                                                               nt_table,
                                                               score_matrix,
                                                               gap_open,
@@ -4717,6 +4755,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
                                                            const char* read,
                                                            const char* qual,
                                                            int32_t readLen,
+                                                           gssw_node** pinning_nodes,
+                                                           int32_t num_pinning_nodes,
                                                            int8_t* nt_table,
                                                            int8_t* adj_score_matrix,
                                                            uint8_t gap_open,
@@ -4731,6 +4771,8 @@ gssw_graph_mapping* gssw_graph_trace_back_pinned_qual_adj (gssw_graph* graph,
                                                               read,
                                                               qual,
                                                               readLen,
+                                                              pinning_nodes,
+                                                              num_pinning_nodes,
                                                               nt_table,
                                                               adj_score_matrix,
                                                               gap_open,
@@ -4747,6 +4789,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
                                                          int32_t find_internal_node_alts,
                                                          const char* read,
                                                          int32_t readLen,
+                                                         gssw_node** pinning_nodes,
+                                                         int32_t num_pinning_nodes,
                                                          int8_t* nt_table,
                                                          int8_t* score_matrix,
                                                          uint8_t gap_open,
@@ -4761,6 +4805,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_multi (gssw_graph* graph,
                                           read,
                                           NULL,
                                           readLen,
+                                          pinning_nodes,
+                                          num_pinning_nodes,
                                           nt_table,
                                           score_matrix,
                                           gap_open,
@@ -4775,6 +4821,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* gr
                                                                   const char* read,
                                                                   const char* qual,
                                                                   int32_t readLen,
+                                                                  gssw_node** pinning_nodes,
+                                                                  int32_t num_pinning_nodes,
                                                                   int8_t* nt_table,
                                                                   int8_t* adj_score_matrix,
                                                                   uint8_t gap_open,
@@ -4788,6 +4836,8 @@ gssw_graph_mapping** gssw_graph_trace_back_pinned_qual_adj_multi (gssw_graph* gr
                                           read,
                                           qual,
                                           readLen,
+                                          pinning_nodes,
+                                          num_pinning_nodes,
                                           nt_table,
                                           adj_score_matrix,
                                           gap_open,
