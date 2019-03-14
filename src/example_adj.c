@@ -22,6 +22,12 @@ void remove_phred_offset(char* qual_str) {
 
 //	Align a pair of genome sequences.
 int main (int argc, char * const argv[]) {
+    
+    if (argc != 7) {
+        fprintf(stderr, "usage: gssw_example_adj nodeseq1 nodeseq2 nodeseq3 nodeseq4 readseq qualstr\n");
+        exit(1);
+    }
+    
     // default parameters for genome sequence alignment
     int8_t match = 1, mismatch = 4, gap_open = 6, gap_extension = 1;
     // from Mengyao's example about the importance of using all three matrices in traceback.
