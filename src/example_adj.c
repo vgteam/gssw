@@ -101,10 +101,14 @@ int main (int argc, char * const argv[]) {
     gssw_print_graph_mapping(gm, stdout);
     gssw_graph_mapping_destroy(gm);
     
+    gssw_node** pinning_nodes = (gssw_node**) malloc(sizeof(gssw_node*));
+    pinning_nodes[0] = nodes[3];
     gssw_graph_mapping* gmp = gssw_graph_trace_back_pinned_qual_adj (graph,
                                                                      read_seq,
                                                                      read_qual,
                                                                      strlen(read_seq),
+                                                                     pinning_nodes,
+                                                                     1,
                                                                      nt_table,
                                                                      adj_mat,
                                                                      gap_open,
@@ -122,6 +126,8 @@ int main (int argc, char * const argv[]) {
                                                                              read_seq,
                                                                              read_qual,
                                                                              strlen(read_seq),
+                                                                             pinning_nodes,
+                                                                             1,
                                                                              nt_table,
                                                                              adj_mat,
                                                                              gap_open,
@@ -136,6 +142,7 @@ int main (int argc, char * const argv[]) {
     }
     
     free(gmps);
+    free(pinning_nodes);
     
     // note that nodes which are referred to in this graph are destroyed as well
     gssw_graph_destroy(graph);
