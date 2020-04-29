@@ -2739,7 +2739,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                     scoreHere = next_score_here;
                     continue;
                 }
-                else if (i == 0) {
+                else if (i == 0 && j > 0) {
                     // We didn't check the alternate tracebacks that cross the node boundary
                     // from the match matrix, and now we're entering the read gap matrix, so we
                     // need to check these alternate tracebacks now because the POA function will
@@ -3505,7 +3505,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                     scoreHere = next_score_here;
                     continue;
                 }
-                else if (i == 0) {
+                else if (i == 0 && j > 0) {
                     // We didn't check the alternate tracebacks that cross the node boundary
                     // from the match matrix, and now we're entering the read gap matrix, so we
                     // need to check these alternate tracebacks now because the POA function will
