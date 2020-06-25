@@ -1,5 +1,5 @@
 CC:=gcc
-CFLAGS+=-Wall -O3 -msse4 -g
+CFLAGS+=-Wall -O3 -g
 OBJ_DIR:=obj
 BIN_DIR:=bin
 SRC_DIR:=src

@@ -13,7 +13,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
-#include <smmintrin.h>
+#define SIMDE_ENABLE_NATIVE_ALIASES
+#include "simde/x86/sse4.1.h"
 
 /*!	@typedef	structure of the query profile	*/
 struct gssw_profile;
@@ -787,4 +788,5 @@ void gssw_sse2_disable();
 }
 #endif	// __cplusplus
 
+#undef SIMDE_ENABLE_NATIVE_ALIASES
 #endif	// SSW_H
