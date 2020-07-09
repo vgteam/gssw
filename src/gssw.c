@@ -29,7 +29,8 @@
  *  Created by Mengyao Zhao on 6/22/10.
  *  Generalized to operate on graphs by Erik Garrison and renamed gssw.c
  */
-#include <emmintrin.h>
+#define SIMDE_ENABLE_NATIVE_ALIASES
+#include "simde/x86/sse2.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -6015,4 +6016,3 @@ void gssw_add_alignment(gssw_multi_align_stack* stack, gssw_alternate_alignment_
 int16_t gssw_min_alt_alignment_score(gssw_multi_align_stack* stack) {
     return stack->bottom_scoring->alt_alignment->score;
 }
-
