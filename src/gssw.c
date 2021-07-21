@@ -3385,6 +3385,9 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                     continue;
                 }
                 else if (i == 0 && j > 0) {
+#ifdef DEBUG_TRACEBACK
+                    fprintf(stderr, "Also checking for matches across node boundary\n");
+#endif
                     // We didn't check the alternate tracebacks that cross the node boundary
                     // from the match matrix, and now we're entering the read gap matrix, so we
                     // need to check these alternate tracebacks now because the POA function will
@@ -4001,10 +4004,8 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                             break;
                         }
                     }
-                    fprintf(stderr, "checking %d previous nodes\n", n->count_prev);
                     
                     for (i = 0; i < n->count_prev; ++i) {
-                        fprintf(stderr, "getting source scores on node %d\n", i);
                         // Consider each node we could have come from
                         gssw_node* cn = n->prev[i];
                         
