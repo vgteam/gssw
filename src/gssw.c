@@ -2620,6 +2620,67 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                 }
                 
             }
+            else if (j == 0) {
+                score_diff = scoreHere - align_score;
+#ifdef DEBUG_TRACEBACK
+                fprintf(stderr, "score diff from match to outside matrix: %d from score here %d and align score %d compared to alignment score %d\n", score_diff, scoreHere, align_score, alignment_deflections->score);
+#endif
+                if (score_diff == 0 && !found_trace) {
+                    found_trace = 1;
+                    if (ref[i] == 'N' || read[j] == 'N') {
+                        // This is an N-match.
+                        gssw_cigar_push_back(result, 'N', 1);
+#ifdef DEBUG_TRACEBACK
+                        fprintf(stderr, "Alignment start N-match, ref = %c, read = %c\n", ref[i], read[j]);
+#endif
+                    }
+                    else if (ref[i] == read[j]) {
+                        // This is a match
+                        gssw_cigar_push_back(result, 'M', 1);
+                        
+#ifdef DEBUG_TRACEBACK
+                        fprintf(stderr, "Alignment start match, ref = %c, read = %c\n", ref[i], read[j]);
+#endif
+                    }
+                    else {
+                        // This is a mismatch (possible with pinning bonus)
+                        gssw_cigar_push_back(result, 'X', 1);
+                        
+#ifdef DEBUG_TRACEBACK
+                        fprintf(stderr, "Alignment start mismatch, ref = %c, read = %c\n", ref[i], read[j]);
+#endif
+                    }
+                    next_j--;
+                    next_i--;
+                    next_score_here -= align_score;
+                    
+                    // if this is the last alignment we do not need to look for suboptimal scores
+                    if (final_traceback) {
+                        i = next_i;
+                        j = next_j;
+                        gRef = next_g_ref;
+                        gRead = next_g_read;
+                        scoreHere = next_score_here;
+                        continue;
+                    }
+                }
+                else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
+                                  score_diff < alignment_deflections->score &&
+                                  score_diff == 0 && find_internal_node_alts)) {
+                    // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
+                    // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
+                    // also this alignment is only valid as a start if the implicit source score is 0
+                    uint16_t alt_score = alignment_deflections->score - score_diff;
+#ifdef DEBUG_TRACEBACK
+                    fprintf(stderr, "Considering alternate alignment match -> start with score %d\n", alt_score);
+#endif
+                    if (alt_score > gssw_min_alt_alignment_score(alt_alignment_stack)
+                        || alt_alignment_stack->current_size < alt_alignment_stack->capacity) {
+                        gssw_add_alignment(alt_alignment_stack, alignment_deflections, alt_score,
+                                           j, i, node, node, Match, Match);
+                    }
+                }
+            }
             
             source_score = mF[readLen*i + j];
             score_diff = scoreHere - source_score;
@@ -3326,6 +3387,67 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                 }
                 
             }
+            else if (j == 0) {
+                score_diff = scoreHere - align_score;
+#ifdef DEBUG_TRACEBACK
+                fprintf(stderr, "score diff from match to outside matrix: %d from score here %d and align score %d compared to alignment score %d\n", score_diff, scoreHere, align_score, alignment_deflections->score);
+#endif
+                if (score_diff == 0 && !found_trace) {
+                    found_trace = 1;
+                    if (ref[i] == 'N' || read[j] == 'N') {
+                        // This is an N-match.
+                        gssw_cigar_push_back(result, 'N', 1);
+#ifdef DEBUG_TRACEBACK
+                        fprintf(stderr, "Alignment start N-match, ref = %c, read = %c\n", ref[i], read[j]);
+#endif
+                    }
+                    else if (ref[i] == read[j]) {
+                        // This is a match
+                        gssw_cigar_push_back(result, 'M', 1);
+                        
+#ifdef DEBUG_TRACEBACK
+                        fprintf(stderr, "Alignment start match, ref = %c, read = %c\n", ref[i], read[j]);
+#endif
+                    }
+                    else {
+                        // This is a mismatch (possible with pinning bonus)
+                        gssw_cigar_push_back(result, 'X', 1);
+                        
+#ifdef DEBUG_TRACEBACK
+                        fprintf(stderr, "Alignment start mismatch, ref = %c, read = %c\n", ref[i], read[j]);
+#endif
+                    }
+                    next_j--;
+                    next_i--;
+                    next_score_here -= align_score;
+                    
+                    // if this is the last alignment we do not need to look for suboptimal scores
+                    if (final_traceback) {
+                        i = next_i;
+                        j = next_j;
+                        gRef = next_g_ref;
+                        gRead = next_g_read;
+                        scoreHere = next_score_here;
+                        continue;
+                    }
+                }
+                else if (UNLIKELY(*deflection_idx == alignment_deflections->num_deflections &&
+                                  score_diff < alignment_deflections->score &&
+                                  score_diff == 0 && find_internal_node_alts)) {
+                    // score is suboptimal or we have already chosen an optimal trace and the alternate alignment
+                    // does not involve any negative or 0 scores (these are not actually extensions of a local alignment)
+                    // also this alignment is only valid as a start if the implicit source score is 0
+                    uint16_t alt_score = alignment_deflections->score - score_diff;
+#ifdef DEBUG_TRACEBACK
+                    fprintf(stderr, "Considering alternate alignment match -> start with score %d\n", alt_score);
+#endif
+                    if (alt_score > gssw_min_alt_alignment_score(alt_alignment_stack)
+                        || alt_alignment_stack->current_size < alt_alignment_stack->capacity) {
+                        gssw_add_alignment(alt_alignment_stack, alignment_deflections, alt_score,
+                                           j, i, node, node, Match, Match);
+                    }
+                }
+            }
             
             source_score = mF[readLen*i + j];
             score_diff = scoreHere - source_score;
@@ -3980,29 +4102,34 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                     if (readEnd == readLen - 1) {
                         align_score += end_full_length_bonus;
                     }
+                    if (readEnd == 0) {
+                        align_score += start_full_length_bonus;
+                    }
                     
-                    if (UNLIKELY(readEnd == 0)) {
-                        // The alignment received a bonus to its score for aligning the full length.
-                        // If so, we can break here even though score is not 0
-                        if (score == start_full_length_bonus + align_score) {
-                            if (refChar == 'N' || readChar == 'N') {
-                                gssw_cigar_push_front(nc->cigar, 'N', 1);
-                            }
-                            else if (refChar == readChar) {
-                                gssw_cigar_push_front(nc->cigar, 'M', 1);
-                            }
-                            else {
-                                gssw_cigar_push_front(nc->cigar, 'X', 1);
-                            }
-                            refEnd--;
-                            readEnd--;
-                            break;
+                    if (UNLIKELY(score == align_score)) {
+                        // this is the last match in the alignment
+                        if (refChar == 'N' || readChar == 'N') {
+                            gssw_cigar_push_front(nc->cigar, 'N', 1);
                         }
-                        else if (score == start_full_length_bonus - gap_open && gapInRef) {
-                            gssw_cigar_push_front(nc->cigar, 'I', 1);
-                            readEnd--;
-                            break;
+                        else if (refChar == readChar) {
+                            gssw_cigar_push_front(nc->cigar, 'M', 1);
                         }
+                        else {
+                            gssw_cigar_push_front(nc->cigar, 'X', 1);
+                        }
+                        refEnd--;
+                        readEnd--;
+                        if (readEnd >= 0) {
+                            gssw_cigar_push_front(nc->cigar, 'S', readEnd + 1);
+                        }
+                        break;
+                    }
+                    else if (UNLIKELY(gapInRef && readEnd == 0 && score == start_full_length_bonus - gap_open)) {
+                        // this is a weird event, but it could happen with some scoring regimes
+                        // there's a penalized insertion taken to obtain the full length bonus
+                        gssw_cigar_push_front(nc->cigar, 'I', 1);
+                        readEnd--;
+                        break;
                     }
                     
                     for (i = 0; i < n->count_prev; ++i) {
@@ -4288,29 +4415,34 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                     if (readEnd == readLen - 1) {
                         align_score += end_full_length_bonus;
                     }
+                    if (readEnd == 0) {
+                        align_score += start_full_length_bonus;
+                    }
                     
-                    if (UNLIKELY(readEnd == 0)) {
-                        // The alignment received a bonus to its score for aligning the full length in pinned alignment.
-                        // If so, we can break here even though score is not 0
-                        if (score == start_full_length_bonus + align_score) {
-                            if (refChar == 'N' || readChar == 'N') {
-                                gssw_cigar_push_front(nc->cigar, 'N', 1);
-                            }
-                            else if (refChar == readChar) {
-                                gssw_cigar_push_front(nc->cigar, 'M', 1);
-                            }
-                            else {
-                                gssw_cigar_push_front(nc->cigar, 'X', 1);
-                            }
-                            refEnd--;
-                            readEnd--;
-                            break;
+                    if (UNLIKELY(score == align_score)) {
+                        // this is the last match in the alignment
+                        if (refChar == 'N' || readChar == 'N') {
+                            gssw_cigar_push_front(nc->cigar, 'N', 1);
                         }
-                        else if (score == start_full_length_bonus - gap_open && gapInRef) {
-                            gssw_cigar_push_front(nc->cigar, 'I', 1);
-                            readEnd--;
-                            break;
+                        else if (refChar == readChar) {
+                            gssw_cigar_push_front(nc->cigar, 'M', 1);
                         }
+                        else {
+                            gssw_cigar_push_front(nc->cigar, 'X', 1);
+                        }
+                        refEnd--;
+                        readEnd--;
+                        if (readEnd >= 0) {
+                            gssw_cigar_push_front(nc->cigar, 'S', readEnd + 1);
+                        }
+                        break;
+                    }
+                    else if (UNLIKELY(gapInRef && readEnd == 0 && score == start_full_length_bonus - gap_open)) {
+                        // this is a weird event, but it could happen with some scoring regimes
+                        // there's a penalized insertion taken to obtain the full length bonus
+                        gssw_cigar_push_front(nc->cigar, 'I', 1);
+                        readEnd--;
+                        break;
                     }
                     
                     for (i = 0; i < n->count_prev; ++i) {
