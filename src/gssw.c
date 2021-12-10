@@ -1944,11 +1944,11 @@ void gssw_graph_print(gssw_graph* graph) {
     fprintf(stdout, "GRAPH digraph variants {\n");
     for (i=0; i<gs; ++i, ++npp) {
         gssw_node* n = *npp;
-        fprintf(stdout, "GRAPH // node %u %u %s\n", n->id, n->len, n->seq);
+        fprintf(stdout, "GRAPH // node %llu %u %s\n", n->id, n->len, n->seq);
         uint32_t k;
         for (k=0; k<n->count_prev; ++k) {
             //fprintf(stdout, "GRAPH %u -> %u;\n", n->prev[k]->id, n->id);
-            fprintf(stdout, "GRAPH \"%u %s\" -> \"%u %s\";\n", n->prev[k]->id, n->prev[k]->seq, n->id, n->seq);
+            fprintf(stdout, "GRAPH \"%llu %s\" -> \"%llu %s\";\n", n->prev[k]->id, n->prev[k]->seq, n->id, n->seq);
         }
     }
     fprintf(stdout, "GRAPH }\n");
@@ -1960,11 +1960,11 @@ void gssw_graph_print_stderr(gssw_graph* graph) {
     fprintf(stderr, "GRAPH digraph variants {\n");
     for (i=0; i<gs; ++i, ++npp) {
         gssw_node* n = *npp;
-        fprintf(stderr, "GRAPH // node %u %u %s\n", n->id, n->len, n->seq);
+        fprintf(stderr, "GRAPH // node %llu %u %s\n", n->id, n->len, n->seq);
         uint32_t k;
         for (k=0; k<n->count_prev; ++k) {
             //fprintf(stdout, "GRAPH %u -> %u;\n", n->prev[k]->id, n->id);
-            fprintf(stderr, "GRAPH \"%u %s\" -> \"%u %s\";\n", n->prev[k]->id, n->prev[k]->seq, n->id, n->seq);
+            fprintf(stderr, "GRAPH \"%llu %s\" -> \"%llu %s\";\n", n->prev[k]->id, n->prev[k]->seq, n->id, n->seq);
         }
     }
     fprintf(stderr, "GRAPH }\n");
@@ -1975,7 +1975,7 @@ void gssw_graph_print_score_matrices(gssw_graph* graph, const char* read, int32_
     gssw_node** npp = graph->nodes;
     for (i=0; i<gs; ++i, ++npp) {
         gssw_node* n = *npp;
-        fprintf(out, "node %u\n", n->id);
+        fprintf(out, "node %llu\n", n->id);
         gssw_print_score_matrix(n->seq, n->len, read, readLen, n->alignment, out);
     }
 }
@@ -2177,7 +2177,7 @@ gssw_cigar* gssw_alignment_trace_back_byte (gssw_node* node,
                          && node == next_deflxn->from_node && node == next_deflxn->to_node
                          && curr_matrix == next_deflxn->from_matrix)) {
 #ifdef DEBUG_TRACEBACK
-                fprintf(stderr, "taking deflection from i = %d, j = %d in node %d\n", i, j, node->id);
+                fprintf(stderr, "taking deflection from i = %d, j = %d in node %llu\n", i, j, node->id);
 #endif
                 // take the deflection instead of doing traceback this iteration
                 if (gRead) {
@@ -2944,7 +2944,7 @@ gssw_cigar* gssw_alignment_trace_back_word (gssw_node* node,
                          && node == next_deflxn->from_node && node == next_deflxn->to_node
                          && curr_matrix == next_deflxn->from_matrix)) {
 #ifdef DEBUG_TRACEBACK
-                fprintf(stderr, "taking deflection from i = %d, j = %d in node %d\n", i, j, node->id);
+                fprintf(stderr, "taking deflection from i = %d, j = %d in node %llu\n", i, j, node->id);
 #endif
                 // take the deflection instead of doing traceback this iteration
                 if (gRead) {
@@ -3620,7 +3620,7 @@ void gssw_print_graph_cigar(gssw_graph_cigar* g, FILE* out) {
     int32_t i;
     gssw_node_cigar* nc = g->elements;
     for (i = 0; i < g->length; ++i, ++nc) {
-        fprintf(out, "%u[", nc->node->id);
+        fprintf(out, "%llu[", nc->node->id);
         gssw_print_cigar(nc->cigar, out);
         fprintf(out, "]");
     }
@@ -3883,12 +3883,12 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
         }
         
 #ifdef DEBUG_TRACEBACK
-        fprintf(stderr, "new trace back, starting node = %p %u\n", n, n->id);
+        fprintf(stderr, "new trace back, starting node = %p %llu\n", n, n->id);
         fprintf(stderr, "score %d, deflections (%d, %p):\n", alt_alignment->score, alt_alignment->num_deflections, alt_alignment->deflections);
         int v;
         for (v = 0; v < alt_alignment->num_deflections; v++) {
             gssw_trace_back_deflection deflxn = alt_alignment->deflections[v];
-            fprintf(stderr, "\t(n:%d, %c[%d,%d]) -> (n:%d, %c)\n", deflxn.from_node->id,
+            fprintf(stderr, "\t(n:%llu, %c[%d,%d]) -> (n:%llu, %c)\n", deflxn.from_node->id,
                     deflxn.from_matrix == Match ? 'H' : deflxn.from_matrix == ReadGap ? 'E' : 'F',
                     deflxn.ref_pos, deflxn.read_pos, deflxn.to_node->id,
                     deflxn.to_matrix == Match ? 'H' : deflxn.to_matrix == ReadGap ? 'E' : 'F');
@@ -3905,7 +3905,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
             // write the cigar to the current node
             nc = gc->elements + gc->length;
 #ifdef DEBUG_TRACEBACK
-            fprintf(stderr, "id=%i\n", n->id);
+            fprintf(stderr, "id=%llu\n", n->id);
 #endif
             nc->cigar = gssw_alignment_trace_back (n,
                                                    alt_alignment_stack,
@@ -3944,7 +3944,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
             nc->node = n;
             ++gc->length;
 #ifdef DEBUG_TRACEBACK
-            fprintf(stderr, "score is %u as we end node %p %u at position %i in read and %i in ref\n", score, n, n->id, readEnd, refEnd);
+            fprintf(stderr, "score is %u as we end node %p %llu at position %i in read and %i in ref\n", score, n, n->id, readEnd, refEnd);
 #endif
             if (score != 0 && refEnd > 0) {
                 // We've stopped the traceback, possibly outside the matrix, but we
@@ -4000,13 +4000,13 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                     // Is there a deflection here?
                     gssw_matrix_t curr_matrix = gapInRead ? ReadGap : Match;
 #ifdef DEBUG_TRACEBACK
-                    fprintf(stderr, "next deflection deflection is from ref pos = %d, read pos = %d, matrix = %s in node %d to matrix = %s in node %d\n", next_deflxn->ref_pos, next_deflxn->read_pos, (next_deflxn->from_matrix == Match ? "Match" : (next_deflxn->from_matrix == ReadGap ? "ReadGap" : "RefGap")), next_deflxn->from_node->id, (next_deflxn->to_matrix == Match ? "Match" : (next_deflxn->to_matrix == ReadGap) ? "ReadGap" : "RefGap"), next_deflxn->to_node->id);
+                    fprintf(stderr, "next deflection deflection is from ref pos = %d, read pos = %d, matrix = %s in node %llu to matrix = %s in node %llu\n", next_deflxn->ref_pos, next_deflxn->read_pos, (next_deflxn->from_matrix == Match ? "Match" : (next_deflxn->from_matrix == ReadGap ? "ReadGap" : "RefGap")), next_deflxn->from_node->id, (next_deflxn->to_matrix == Match ? "Match" : (next_deflxn->to_matrix == ReadGap) ? "ReadGap" : "RefGap"), next_deflxn->to_node->id);
 #endif
                     if (refEnd == next_deflxn->ref_pos && readEnd == next_deflxn->read_pos
                         && n == next_deflxn->from_node && curr_matrix == next_deflxn->from_matrix) {
                         // take the deflection instead of doing traceback this iteration
 #ifdef DEBUG_TRACEBACK
-                        fprintf(stderr, "taking new node deflection from i = %d, j = %d in node %d to node %d\n", refEnd, readEnd, n->id, next_deflxn->to_node->id);
+                        fprintf(stderr, "taking new node deflection from i = %d, j = %d in node %llu to node %llu\n", refEnd, readEnd, n->id, next_deflxn->to_node->id);
 #endif
                         // go to the node that deflection indicates
                         best_prev = next_deflxn->to_node;
@@ -4317,13 +4317,13 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                     // Is there a deflection here?
                     gssw_matrix_t curr_matrix = gapInRead ? ReadGap : Match;
 #ifdef DEBUG_TRACEBACK
-                    fprintf(stderr, "next deflection deflection is from ref pos = %d, read pos = %d, matrix = %s in node %d to matrix = %s in node %d\n", next_deflxn->ref_pos, next_deflxn->read_pos, (next_deflxn->from_matrix == Match ? "Match" : (next_deflxn->from_matrix == ReadGap ? "ReadGap" : "RefGap")), next_deflxn->from_node->id, (next_deflxn->to_matrix == Match ? "Match" : (next_deflxn->to_matrix == ReadGap) ? "ReadGap" : "RefGap"), next_deflxn->to_node->id);
+                    fprintf(stderr, "next deflection deflection is from ref pos = %d, read pos = %d, matrix = %s in node %llu to matrix = %s in node %llu\n", next_deflxn->ref_pos, next_deflxn->read_pos, (next_deflxn->from_matrix == Match ? "Match" : (next_deflxn->from_matrix == ReadGap ? "ReadGap" : "RefGap")), next_deflxn->from_node->id, (next_deflxn->to_matrix == Match ? "Match" : (next_deflxn->to_matrix == ReadGap) ? "ReadGap" : "RefGap"), next_deflxn->to_node->id);
 #endif
                     if (refEnd == next_deflxn->ref_pos && readEnd == next_deflxn->read_pos
                         && n == next_deflxn->from_node && curr_matrix == next_deflxn->from_matrix) {
                         // take the deflection instead of doing traceback this iteration
 #ifdef DEBUG_TRACEBACK
-                        fprintf(stderr, "taking new node deflection from i = %d, j = %d in node %d to node %d\n", refEnd, readEnd, n->id, next_deflxn->to_node->id);
+                        fprintf(stderr, "taking new node deflection from i = %d, j = %d in node %llu to node %llu\n", refEnd, readEnd, n->id, next_deflxn->to_node->id);
 #endif
                         // go to the node that deflection indicates
                         best_prev = next_deflxn->to_node;
@@ -4633,7 +4633,7 @@ gssw_graph_mapping** gssw_graph_trace_back_internal (gssw_graph* graph,
                 refEnd = n->len - 1;
                 ++nc;
 #ifdef DEBUG_TRACEBACK
-                fprintf(stderr, "transitioning to new node at %p with id %d at reference position %d with score %d\n", n, n->id, refEnd, score);
+                fprintf(stderr, "transitioning to new node at %p with id %llu at reference position %d with score %d\n", n, n->id, refEnd, score);
 #endif
             }
             else {
@@ -4963,7 +4963,7 @@ void gssw_seed_destroy(gssw_seed* s) {
 
 //TODO: why is score_matrix even an argument here?
 gssw_node* gssw_node_create(void* data,
-                            const uint32_t id,
+                            const uint64_t id,
                             const char* seq,
                             const int8_t* nt_table,
                             const int8_t* score_matrix) {
@@ -5092,7 +5092,7 @@ gssw_seed* gssw_create_seed_byte(int32_t readLen, gssw_node** prev, int32_t coun
     for (k = 0; k < count; ++k) {
         if (!prev[k]->alignment) {
             fprintf(stderr, "error:[gssw] cannot align because node predecessors cannot provide seed\n");
-            fprintf(stderr, "failing is node %u\n", prev[k]->id);
+            fprintf(stderr, "failing is node %llu\n", prev[k]->id);
             exit(1);
         }
     }
@@ -5127,7 +5127,7 @@ gssw_seed* gssw_create_seed_word(int32_t readLen, gssw_node** prev, int32_t coun
     for (k = 0; k < count; ++k) {
         if (!prev[k]->alignment) {
             fprintf(stderr, "error:[gssw] cannot align because node predecessors cannot provide seed\n");
-            fprintf(stderr, "failing is node %u\n", prev[k]->id);
+            fprintf(stderr, "failing is node %llu\n", prev[k]->id);
             exit(1);
         }
     }
@@ -5451,7 +5451,7 @@ void gssw_graph_destroy(gssw_graph* g) {
     free(g);
 }
 
-int32_t gssw_graph_add_node(gssw_graph* graph, gssw_node* node) {
+uint32_t gssw_graph_add_node(gssw_graph* graph, gssw_node* node) {
     if (UNLIKELY(graph->size % 1024 == 0)) {
         size_t old_size = graph->size * sizeof(void*);
         size_t increment = 1024 * sizeof(void*);
@@ -5930,7 +5930,7 @@ void gssw_add_alignment(gssw_multi_align_stack* stack, gssw_alternate_alignment_
     
 #ifdef DEBUG_TRACEBACK
     if (from_node) {
-        fprintf(stderr, "checking whether to add new alignment at read pos %d, ref pos %d, from node id %d, to node id %d, score %d, from matrix %s, to matrix %s\n", read_pos, ref_pos, from_node->id, to_node->id, score, from_matrix == Match ? "Match" : (from_matrix == RefGap ? "RefGap" : "ReadGap"), to_matrix == Match ? "Match" : (to_matrix == RefGap ? "RefGap" : "ReadGap"));
+        fprintf(stderr, "checking whether to add new alignment at read pos %d, ref pos %d, from node id %llu, to node id %llu, score %d, from matrix %s, to matrix %s\n", read_pos, ref_pos, from_node->id, to_node->id, score, from_matrix == Match ? "Match" : (from_matrix == RefGap ? "RefGap" : "ReadGap"), to_matrix == Match ? "Match" : (to_matrix == RefGap ? "RefGap" : "ReadGap"));
     }
     else {
         fprintf(stderr, "checking whether to add new alignment at read pos %d, ref pos %d, score %d, from matrix %s, to matrix %s\n", read_pos, ref_pos, score, from_matrix == Match ? "Match" : (from_matrix == RefGap ? "RefGap" : "ReadGap"), to_matrix == Match ? "Match" : (to_matrix == RefGap ? "RefGap" : "ReadGap"));
