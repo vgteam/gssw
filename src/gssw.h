@@ -151,7 +151,7 @@ struct gssw_profile{
 typedef struct _gssw_node gssw_node;
 typedef struct _gssw_node {
     void* data;
-    uint32_t id;
+    uint64_t id;
     char* seq; // sequence
     int8_t* num; // numerical conversion of seq
     int32_t len; // length of sequence
@@ -589,7 +589,7 @@ void gssw_print_cigar(gssw_cigar* c, FILE* out);
 void gssw_cigar_destroy(gssw_cigar* c);
 
 gssw_node* gssw_node_create(void* data,
-                            const uint32_t id,
+                            const uint64_t id,
                             const char* seq,
                             const int8_t* nt_table,
                             const int8_t* score_matrix);
@@ -668,7 +668,7 @@ gssw_graph_fill_pinned_qual_adj(gssw_graph* graph,
                                 bool save_matrixes);
     
 gssw_graph* gssw_graph_create(uint32_t size);
-int32_t gssw_graph_add_node(gssw_graph* graph,
+uint32_t gssw_graph_add_node(gssw_graph* graph,
                             gssw_node* node);
 void gssw_graph_clear(gssw_graph* graph);
 void gssw_graph_destroy(gssw_graph* graph);
