@@ -23,15 +23,15 @@ include_directories("${PROJECT_SOURCE_DIR}")
 
 # set up our target executable and specify its dependencies and includes
 add_library(gssw_objs OBJECT
-  ${CMAKE_SOURCE_DIR}/src/gssw.c)
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/gssw.c)
 add_library(libgssw STATIC $<TARGET_OBJECTS:gssw_objs>)
 set_target_properties(libgssw PROPERTIES OUTPUT_NAME "gssw")
 
 add_executable(gssw-test
   $<TARGET_OBJECTS:gssw_objs>
-  ${CMAKE_SOURCE_DIR}/src/gssw_test.c)
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/gssw_test.c)
 target_include_directories(gssw-test PUBLIC
-  "${CMAKE_SOURCE_DIR}/src")
+  "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(gssw-test
   -lm)
 
